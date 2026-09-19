@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Shield, Sparkles, Volume2, Eye, Zap, Mic, Flame, Award, Footprints, RotateCcw, Egg, ArrowRight, HelpCircle, Brain } from 'lucide-react';
-import { StageType, UnitData, StolenEgg, PetCompanion, GameState, SkillTreeState, CreatureRarity, PetAppearance } from './types';
+import { StageType, UnitData, StolenEgg, PetCompanion, GameState, SkillTreeState, CreatureRarity, PetAppearance, EggTierType } from './types';
 import { UNITS_DATA } from './data/unitsData';
 import { getEnchantmentConfig, CREATURES_CATALOG } from './data/creaturesData';
 import { PET_SKILL_NODES, getPassiveBonuses, calculateTotalSpentCrystals } from './data/skillTreeData';
@@ -30,6 +30,7 @@ import { SetAccountNameModal } from './components/SetAccountNameModal';
 import { AiThinkingAssistantModal } from './components/AiThinkingAssistantModal';
 import { auth, onAuthStateChanged, signOut, updateProfile, User, db, collection, getDocs, doc, setDoc, deleteDoc, serverTimestamp } from './lib/firebase';
 import { playAlarmSiren, playDragonGrowl, playBootsBonus, playSuccessChime } from './utils/soundEffects';
+import confetti from 'canvas-confetti';
 
 export default function App() {
   const [currentUnitId, setCurrentUnitId] = useState<string>('unit-1');
@@ -126,6 +127,32 @@ export default function App() {
       return {};
     }
   });
+
+  // 24-hour Daily Gift Cooldown Tracking (Prevents infinite giveaway exploit)
+  const DAILY_GIFT_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+  const [lastDailyGiftTime, setLastDailyGiftTime] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('egg_thief_last_daily_gift_timestamp');
+      return saved ? parseInt(saved, 10) : 0;
+    } catch {
+      return 0;
+    }
+  });
+
+  const [dailyGiftCooldownMs, setDailyGiftCooldownMs] = useState<number>(() => {
+    const elapsed = Date.now() - (lastDailyGiftTime || 0);
+    return Math.max(0, DAILY_GIFT_COOLDOWN_MS - elapsed);
+  });
+
+  useEffect(() => {
+    const updateCooldown = () => {
+      const elapsed = Date.now() - (lastDailyGiftTime || 0);
+      setDailyGiftCooldownMs(Math.max(0, DAILY_GIFT_COOLDOWN_MS - elapsed));
+    };
+    updateCooldown();
+    const interval = setInterval(updateCooldown, 1000);
+    return () => clearInterval(interval);
+  }, [lastDailyGiftTime]);
 
   // Calculate active passive modifiers
   const passiveBonuses = useMemo(() => getPassiveBonuses(skillTreeState), [skillTreeState]);
@@ -702,31 +729,67 @@ export default function App() {
   };
 
   const handleClaimFreeGift = () => {
+    const now = Date.now();
+    const elapsed = now - (lastDailyGiftTime || 0);
+
+    if (elapsed < DAILY_GIFT_COOLDOWN_MS) {
+      const remainingMs = DAILY_GIFT_COOLDOWN_MS - elapsed;
+      const hours = Math.floor(remainingMs / (60 * 60 * 1000));
+      const minutes = Math.floor((remainingMs % (60 * 60 * 1000)) / (60 * 1000));
+      const seconds = Math.floor((remainingMs % (60 * 1000)) / 1000);
+      alert(
+        `⏳ BẠN ĐÃ NHẬN QUÀ HÔM NAY RỒI!\n\n` +
+          `• Quà tặng chỉ được nhận 1 lần mỗi 24 giờ để đảm bảo cân bằng game.\n` +
+          `• Thời gian nhận lượt tiếp theo: ${hours} giờ ${minutes} phút (${seconds}s) nữa.\n\n` +
+          `Hãy tiếp tục vượt qua các Ải Tiếng Anh để đoạt thêm Trứng Rồng nhé!`
+      );
+      return;
+    }
+
+    // Save claim timestamp immediately to prevent double-claiming
+    localStorage.setItem('egg_thief_last_daily_gift_timestamp', now.toString());
+    setLastDailyGiftTime(now);
+    setDailyGiftCooldownMs(DAILY_GIFT_COOLDOWN_MS);
+
+    // Balanced reward package
     const randomCreature = CREATURES_CATALOG[Math.floor(Math.random() * CREATURES_CATALOG.length)];
     const newPet: PetCompanion = {
       ...randomCreature,
-      id: `free-gift-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-      hatchedAt: `🎁 Quà Tặng Miễn Phí (${new Date().toLocaleTimeString()})`,
-      level: 50,
+      id: `daily-gift-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      hatchedAt: `🎁 Quà Điểm Danh Ngày (${new Date().toLocaleDateString('vi-VN')})`,
+      level: 10,
       exp: 0,
-      maxExp: 1000,
-      enchantmentLevel: 3,
+      maxExp: 250,
+      enchantmentLevel: 1,
     };
     setHatchedPets((prev) => [newPet, ...prev]);
 
+    const eggTiers: EggTierType[] = ['common', 'silver', 'golden', 'king'];
+    const chosenTier = eggTiers[Math.floor(Math.random() * eggTiers.length)];
+
     const freeEgg: StolenEgg = {
-      id: `free-egg-${Date.now()}`,
-      unitId: 'unit-free',
-      unitTitle: '🎁 Trứng Thần Quà Tặng Miễn Phí',
-      eggType: 'deity',
+      id: `daily-egg-${Date.now()}`,
+      unitId: 'unit-daily-gift',
+      unitTitle: `🎁 Trứng Điểm Danh (${chosenTier.toUpperCase()})`,
+      eggType: chosenTier,
       obtainedScore: 10,
-      stolenAt: 'Free Giveaway Claim',
+      stolenAt: 'Quà Điểm Danh Hàng Ngày',
       isHatched: false,
     };
     setStolenEggs((prev) => [freeEgg, ...prev]);
-    setDragonCrystals((prev) => prev + 1000);
+
+    const crystalReward = 250;
+    setDragonCrystals((prev) => prev + crystalReward);
+
     playSuccessChime();
-    alert(`🎁 NHẬN QUÀ MIỄN PHÍ THÀNH CÔNG!\n- Nhận Pet: ${newPet.name} (Lv.50, ★3)\n- Nhận Trứng: ${freeEgg.unitTitle}\n- Nhận +1000 Dragon Crystals!`);
+    confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
+    alert(
+      `🎁 NHẬN QUÀ ĐIỂM DANH HÀNG NGÀY THÀNH CÔNG!\n\n` +
+        `• Nhận Pet Đồng Hành: ${newPet.name} (Lv.10, ★1)\n` +
+        `• Nhận Trứng: ${freeEgg.unitTitle}\n` +
+        `• Nhận +${crystalReward} Dragon Crystals 💎\n\n` +
+        `⏱️ Quà tiếp theo sẽ có sau 24 giờ nữa. Chúc bạn học tốt!`
+    );
   };
 
   const handleSellPet = (petId: string) => {
@@ -954,6 +1017,7 @@ export default function App() {
         onAddDragonCrystals={(amt) => setDragonCrystals((prev) => prev + amt)}
         onSellPet={handleSellPet}
         onClaimFreeGift={handleClaimFreeGift}
+        dailyGiftCooldownMs={dailyGiftCooldownMs}
         onOpenAppearanceStudio={(petId) => {
           if (petId) {
             setSelectedAppearancePetId(petId);

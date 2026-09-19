@@ -16,6 +16,8 @@ import {
   EyeOff,
   Crown,
   Palette,
+  Clock,
+  Gift,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { PetCompanion, StolenEgg, CreatureRarity, CreatureClassification, EggTierType } from '../types';
@@ -49,6 +51,7 @@ interface HatcheryModalProps {
   onAddDragonCrystals?: (amount: number) => void;
   onSellPet?: (petId: string) => void;
   onClaimFreeGift?: () => void;
+  dailyGiftCooldownMs?: number;
   onOpenAppearanceStudio?: (petId?: string) => void;
   onOpenPokemonPvP?: () => void;
 }
@@ -296,6 +299,7 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
   onAdminUnlockAllPets,
   onSellPet,
   onClaimFreeGift,
+  dailyGiftCooldownMs = 0,
   onOpenAppearanceStudio,
   onOpenPokemonPvP,
 }) => {
@@ -305,6 +309,17 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
   const [justHatchedPet, setJustHatchedPet] = useState<PetCompanion | null>(null);
   const [inspectPet, setInspectPet] = useState<PetCompanion | null>(null);
   const [confirmSellId, setConfirmSellId] = useState<string | null>(null);
+
+  const formatGiftCooldown = (ms: number) => {
+    if (ms <= 0) return '';
+    const h = Math.floor(ms / (60 * 60 * 1000));
+    const m = Math.floor((ms % (60 * 60 * 1000)) / (60 * 1000));
+    const s = Math.floor((ms % (60 * 1000)) / 1000);
+    if (h > 0) {
+      return `${h}h ${m}m`;
+    }
+    return `${m}m ${s}s`;
+  };
 
   // Enchantment Shrine State
   const [selectedEnchantPetId, setSelectedEnchantPetId] = useState<string>(
@@ -619,16 +634,35 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Free Gift Giveaway Button */}
+            {/* Free Gift Giveaway Button (With 24h Cooldown Protection) */}
             {onClaimFreeGift && (
               <button
                 onClick={() => {
                   onClaimFreeGift();
                 }}
-                className="px-2.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 text-slate-950 font-black text-xs shadow-lg flex items-center gap-1 cursor-pointer"
-                title="Nhận ngay Pet và Trứng miễn phí!"
+                className={`px-3 py-1.5 rounded-xl font-black text-xs shadow-lg flex items-center gap-1.5 cursor-pointer transition-all ${
+                  dailyGiftCooldownMs <= 0
+                    ? 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 text-slate-950 animate-pulse shadow-emerald-500/20'
+                    : 'bg-slate-800/90 hover:bg-slate-750 text-slate-300 border border-slate-700/80'
+                }`}
+                title={
+                  dailyGiftCooldownMs <= 0
+                    ? 'Nhận ngay Quà Tặng Điểm Danh Hàng Ngày (24h/lần)!'
+                    : `Bạn đã nhận quà hôm nay rồi! Lượt tiếp theo mở sau ${formatGiftCooldown(dailyGiftCooldownMs)}`
+                }
               >
-                🎁 Quà Tặng
+                {dailyGiftCooldownMs <= 0 ? (
+                  <>
+                    <Gift className="w-3.5 h-3.5 text-slate-950" />
+                    <span>🎁 Quà Điểm Danh</span>
+                    <span className="w-2 h-2 rounded-full bg-emerald-300 animate-ping"></span>
+                  </>
+                ) : (
+                  <>
+                    <Clock className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Quà: {formatGiftCooldown(dailyGiftCooldownMs)}</span>
+                  </>
+                )}
               </button>
             )}
 

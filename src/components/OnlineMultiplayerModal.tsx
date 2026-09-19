@@ -165,6 +165,8 @@ export const OnlineMultiplayerModal: React.FC<OnlineMultiplayerModalProps> = ({
   const [syncStatus, setSyncStatus] = useState<string>('');
   const [isLoadingGifts, setIsLoadingGifts] = useState(false);
   const [isSubmittingGift, setIsSubmittingGift] = useState(false);
+  const [claimingGiftIds, setClaimingGiftIds] = useState<string[]>([]);
+  const [isClaimingAll, setIsClaimingAll] = useState(false);
 
   // Universal Donate State (Online & Offline)
   const [targetAccountMode, setTargetAccountMode] = useState<'select' | 'manual'>('select');
@@ -441,6 +443,7 @@ export const OnlineMultiplayerModal: React.FC<OnlineMultiplayerModalProps> = ({
 
   // ================= UNIVERSAL DONATE LOGIC =================
   const handleSendUniversalGift = async () => {
+    if (isSubmittingGift) return;
     if (!user) {
       alert('Vui lòng đăng nhập Google để sử dụng tính năng donate!');
       return;
@@ -576,9 +579,16 @@ export const OnlineMultiplayerModal: React.FC<OnlineMultiplayerModalProps> = ({
     }
   };
 
-  // Claim single gift
+  // Claim single gift with atomic deletion and anti-duplication lock
   const handleClaimGift = async (gift: GiftItem) => {
+    if (claimingGiftIds.includes(gift.id) || isClaimingAll) return;
+
     try {
+      setClaimingGiftIds((prev) => [...prev, gift.id]);
+
+      // Strictly delete from Firestore FIRST before granting rewards
+      await deleteDoc(doc(db, 'gifts', gift.id));
+
       let rewardDescription = '';
 
       if (gift.giftType === 'crystals' && gift.crystals) {
@@ -603,9 +613,6 @@ export const OnlineMultiplayerModal: React.FC<OnlineMultiplayerModalProps> = ({
         rewardDescription = `Trứng Rồng "${receivedEgg.eggType || 'Thần Thoại'}" 🥚`;
       }
 
-      // Delete claimed gift from database
-      await deleteDoc(doc(db, 'gifts', gift.id));
-
       playSuccessChime();
       confetti({
         particleCount: 90,
@@ -624,38 +631,44 @@ export const OnlineMultiplayerModal: React.FC<OnlineMultiplayerModalProps> = ({
       console.error('Claim gift error:', err);
       handleFirestoreError(err, OperationType.DELETE, `gifts/${gift.id}`);
       alert('Lỗi nhận quà: ' + (err.message || 'Lỗi xử lý'));
+    } finally {
+      setClaimingGiftIds((prev) => prev.filter((id) => id !== gift.id));
     }
   };
 
-  // Claim all gifts in one click
+  // Claim all gifts in one click with anti-spam concurrency lock
   const handleClaimAllGifts = async () => {
-    if (incomingGifts.length === 0) return;
+    if (isClaimingAll || incomingGifts.length === 0) return;
 
     try {
+      setIsClaimingAll(true);
+
       let totalCrystals = 0;
       const newPets: PetCompanion[] = [];
       const newEggs: StolenEgg[] = [];
+      const successfullyDeletedIds: string[] = [];
 
       for (const gift of incomingGifts) {
-        if (gift.giftType === 'crystals' && gift.crystals) {
-          totalCrystals += gift.crystals;
-        } else if (gift.giftType === 'pet' && gift.petData) {
-          newPets.push({
-            ...gift.petData,
-            id: `gifted-pet-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-            hatchedAt: `🎁 Quà tặng từ ${gift.senderName}`,
-          });
-        } else if (gift.giftType === 'egg' && gift.eggData) {
-          newEggs.push({
-            ...gift.eggData,
-            id: `gifted-egg-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-            stolenAt: `🎁 Quà tặng từ ${gift.senderName}`,
-            isHatched: false,
-          });
-        }
-
         try {
           await deleteDoc(doc(db, 'gifts', gift.id));
+          successfullyDeletedIds.push(gift.id);
+
+          if (gift.giftType === 'crystals' && gift.crystals) {
+            totalCrystals += gift.crystals;
+          } else if (gift.giftType === 'pet' && gift.petData) {
+            newPets.push({
+              ...gift.petData,
+              id: `gifted-pet-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+              hatchedAt: `🎁 Quà tặng từ ${gift.senderName}`,
+            });
+          } else if (gift.giftType === 'egg' && gift.eggData) {
+            newEggs.push({
+              ...gift.eggData,
+              id: `gifted-egg-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+              stolenAt: `🎁 Quà tặng từ ${gift.senderName}`,
+              isHatched: false,
+            });
+          }
         } catch (e) {
           console.error('Error deleting gift', gift.id, e);
         }
@@ -671,26 +684,33 @@ export const OnlineMultiplayerModal: React.FC<OnlineMultiplayerModalProps> = ({
         setStolenEggs((prev) => [...newEggs, ...prev]);
       }
 
-      playSuccessChime();
-      confetti({
-        particleCount: 120,
-        spread: 90,
-        origin: { y: 0.5 },
+      const count = successfullyDeletedIds.length;
+      setIncomingGifts((prev) => {
+        const next = prev.filter((g) => !successfullyDeletedIds.includes(g.id));
+        onUpdatePendingGiftsCount?.(next.length);
+        return next;
       });
 
-      const count = incomingGifts.length;
-      setIncomingGifts([]);
-      onUpdatePendingGiftsCount?.(0);
+      if (count > 0) {
+        playSuccessChime();
+        confetti({
+          particleCount: 120,
+          spread: 90,
+          origin: { y: 0.5 },
+        });
 
-      alert(
-        `🎉 ĐÃ NHẬN TOÀN BỘ ${count} PHẦN QUÀ!\n\n` +
-          (totalCrystals > 0 ? `• +${totalCrystals} Dragon Crystals 💎\n` : '') +
-          (newPets.length > 0 ? `• +${newPets.length} Thú Cưng mới 🐾\n` : '') +
-          (newEggs.length > 0 ? `• +${newEggs.length} Trứng Rồng mới 🥚\n` : '')
-      );
+        alert(
+          `🎉 ĐÃ NHẬN TOÀN BỘ ${count} PHẦN QUÀ!\n\n` +
+            (totalCrystals > 0 ? `• +${totalCrystals} Dragon Crystals 💎\n` : '') +
+            (newPets.length > 0 ? `• +${newPets.length} Thú Cưng mới 🐾\n` : '') +
+            (newEggs.length > 0 ? `• +${newEggs.length} Trứng Rồng mới 🥚\n` : '')
+        );
+      }
     } catch (err: any) {
       console.error('Claim all error:', err);
       alert('Lỗi nhận toàn bộ quà: ' + (err.message || 'Lỗi xử lý'));
+    } finally {
+      setIsClaimingAll(false);
     }
   };
 
@@ -1651,10 +1671,15 @@ export const OnlineMultiplayerModal: React.FC<OnlineMultiplayerModalProps> = ({
                     {incomingGifts.length > 0 && (
                       <button
                         onClick={handleClaimAllGifts}
-                        className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 text-white font-black text-xs shadow-md cursor-pointer hover:from-emerald-500 flex items-center gap-1.5"
+                        disabled={isClaimingAll}
+                        className={`px-3.5 py-1.5 rounded-xl font-black text-xs shadow-md flex items-center gap-1.5 transition-all ${
+                          isClaimingAll
+                            ? 'bg-slate-700 text-slate-400 cursor-not-allowed opacity-70'
+                            : 'bg-gradient-to-r from-emerald-600 to-teal-500 text-white cursor-pointer hover:from-emerald-500'
+                        }`}
                       >
                         <Sparkles className="w-3.5 h-3.5" />
-                        <span>Nhận Tất Cả ({incomingGifts.length})</span>
+                        <span>{isClaimingAll ? 'Đang nhận tất cả...' : `Nhận Tất Cả (${incomingGifts.length})`}</span>
                       </button>
                     )}
                   </div>
@@ -1705,10 +1730,15 @@ export const OnlineMultiplayerModal: React.FC<OnlineMultiplayerModalProps> = ({
                           <div className="flex items-center gap-2">
                             <button
                               onClick={() => handleClaimGift(gift)}
-                              className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 text-white font-black text-xs shadow-md cursor-pointer flex items-center gap-1.5 active:scale-95"
+                              disabled={claimingGiftIds.includes(gift.id) || isClaimingAll}
+                              className={`px-4 py-2 rounded-xl font-black text-xs shadow-md flex items-center gap-1.5 transition-all ${
+                                claimingGiftIds.includes(gift.id) || isClaimingAll
+                                  ? 'bg-slate-700 text-slate-400 cursor-not-allowed opacity-70'
+                                  : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 text-white cursor-pointer active:scale-95'
+                              }`}
                             >
                               <Gift className="w-3.5 h-3.5" />
-                              <span>Nhận Quà</span>
+                              <span>{claimingGiftIds.includes(gift.id) ? 'Đang nhận...' : 'Nhận Quà'}</span>
                             </button>
                           </div>
                         </div>
