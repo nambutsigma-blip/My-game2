@@ -290,8 +290,8 @@ export const EvolvedPetSprite: React.FC<EvolvedPetSpriteProps> = ({
     return <div className="w-10 h-10 flex items-center justify-center text-xl">🥚</div>;
   }
 
-  // If not explicitly passed, check if pet enchantment is 5 or more
-  const evolved = isEvolved !== undefined ? isEvolved : (pet.enchantmentLevel || 0) >= 5;
+  // If not explicitly passed, check if pet has evolved or enchantment is 5 or more
+  const evolved = isEvolved !== undefined ? isEvolved : (pet.isEvolved || (pet.enchantmentLevel || 0) >= 5);
   const colors = getElementAuraColors(pet.element);
   const uniqueGradId = `wing-grad-${pet.id || 'evolved'}`;
   const petArtUrl = getCustomPetArtwork(pet);

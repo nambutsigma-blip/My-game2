@@ -32,6 +32,13 @@ import {
 } from '../data/creaturesData';
 import { calculatePetStats } from '../data/arenaData';
 import { playMythicFanfare, playEnchantSound, playLaser, playEvolutionSound } from '../utils/soundEffects';
+import {
+  getEvolutionRequirements,
+  getEvolutionStatComparison,
+  getEvolvedPetForm,
+  getNextRarity,
+  getEvolvedIcon,
+} from '../utils/petEvolution';
 import { EvolvedPetSprite } from './EvolvedPetSprite';
 import { PetEvolutionModal } from './PetEvolutionModal';
 import { CelestialEvolutionBurst } from './CelestialEvolutionBurst';
@@ -51,9 +58,11 @@ interface HatcheryModalProps {
   onAddDragonCrystals?: (amount: number) => void;
   onSellPet?: (petId: string) => void;
   onClaimFreeGift?: () => void;
-  dailyGiftCooldownMs?: number;
+  hasClaimedFreeGift?: boolean;
   onOpenAppearanceStudio?: (petId?: string) => void;
   onOpenPokemonPvP?: () => void;
+  onEvolvePet?: (petId: string) => PetCompanion | null;
+  onLevelUpPet?: (petId: string, levels?: number) => void;
 }
 
 // Visual configuration and distinct aesthetics for each egg tier
@@ -299,27 +308,18 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
   onAdminUnlockAllPets,
   onSellPet,
   onClaimFreeGift,
-  dailyGiftCooldownMs = 0,
+  hasClaimedFreeGift = false,
   onOpenAppearanceStudio,
   onOpenPokemonPvP,
+  onEvolvePet,
+  onLevelUpPet,
 }) => {
-  const [activeTab, setActiveTab] = useState<'eggs' | 'pets' | 'enchant' | 'bestiary'>('eggs');
+  const [activeTab, setActiveTab] = useState<'eggs' | 'pets' | 'enchant' | 'evolve' | 'bestiary'>('eggs');
   const [selectedEgg, setSelectedEgg] = useState<StolenEgg | null>(null);
   const [isHatching, setIsHatching] = useState(false);
   const [justHatchedPet, setJustHatchedPet] = useState<PetCompanion | null>(null);
   const [inspectPet, setInspectPet] = useState<PetCompanion | null>(null);
   const [confirmSellId, setConfirmSellId] = useState<string | null>(null);
-
-  const formatGiftCooldown = (ms: number) => {
-    if (ms <= 0) return '';
-    const h = Math.floor(ms / (60 * 60 * 1000));
-    const m = Math.floor((ms % (60 * 60 * 1000)) / (60 * 1000));
-    const s = Math.floor((ms % (60 * 1000)) / 1000);
-    if (h > 0) {
-      return `${h}h ${m}m`;
-    }
-    return `${m}m ${s}s`;
-  };
 
   // Enchantment Shrine State
   const [selectedEnchantPetId, setSelectedEnchantPetId] = useState<string>(
@@ -327,7 +327,12 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
   );
   const [enchantSuccessFlash, setEnchantSuccessFlash] = useState(false);
 
-  // Evolution Animation State (Level 5 Godhood Transcendence & Celestial Burst)
+  // Evolution State (Rarity Evolution & 5-Star Transcendence)
+  const [selectedEvolvePetId, setSelectedEvolvePetId] = useState<string>(
+    hatchedPets[0]?.id || ''
+  );
+  const [preEvolutionPet, setPreEvolutionPet] = useState<PetCompanion | null>(null);
+  const [isRarityEvolutionActive, setIsRarityEvolutionActive] = useState<boolean>(false);
   const [evolutionPet, setEvolutionPet] = useState<PetCompanion | null>(null);
   const [isEvolutionModalOpen, setIsEvolutionModalOpen] = useState(false);
   const [isPetEvolving, setIsPetEvolving] = useState(false);
@@ -564,9 +569,21 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
     ? calculatePetStats({ ...currentEnchantPet, enchantmentLevel: currentLevel + 1 })
     : currentStats;
 
+  // Selected pet for Rarity Evolution Sanctuary
+  const readyToEvolveCount = hatchedPets.filter(
+    (p) => (p.level || 1) >= 20 && (p.enchantmentLevel || 0) >= 5
+  ).length;
+
+  const currentEvolvePet =
+    hatchedPets.find((p) => p.id === selectedEvolvePetId) ||
+    hatchedPets.find((p) => (p.level || 1) >= 20 && (p.enchantmentLevel || 0) >= 5) ||
+    hatchedPets[0] ||
+    null;
+
   const triggerEvolution = (pet: PetCompanion) => {
     setIsPetEvolving(true);
     setEvolvingPet(pet);
+    setIsRarityEvolutionActive(false);
     playEvolutionSound();
     playMythicFanfare();
     confetti({
@@ -576,8 +593,6 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
       colors: ['#facc15', '#38bdf8', '#c084fc', '#ffffff', '#f59e0b', '#34d399'],
     });
 
-    // Display the celestial burst feedback in the Hatchery altar,
-    // then open the full awakening cinematic modal
     setTimeout(() => {
       setEvolutionPet(pet);
       setIsEvolutionModalOpen(true);
@@ -586,6 +601,61 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
     setTimeout(() => {
       setIsPetEvolving(false);
     }, 4500);
+  };
+
+  const handleTriggerRarityEvolution = (pet: PetCompanion) => {
+    const reqs = getEvolutionRequirements(pet);
+    if (!reqs.canEvolve) return;
+
+    setPreEvolutionPet({ ...pet });
+    setIsRarityEvolutionActive(true);
+
+    let evolved: PetCompanion | null = null;
+    if (onEvolvePet) {
+      evolved = onEvolvePet(pet.id);
+    } else {
+      evolved = getEvolvedPetForm(pet);
+    }
+
+    if (evolved) {
+      setSelectedEvolvePetId(evolved.id);
+      setSelectedEnchantPetId(evolved.id);
+      setIsPetEvolving(true);
+      setEvolvingPet(evolved);
+      playEvolutionSound();
+      playMythicFanfare();
+      confetti({
+        particleCount: 160,
+        spread: 120,
+        origin: { y: 0.5 },
+        colors: ['#facc15', '#ec4899', '#38bdf8', '#c084fc', '#ffffff', '#f59e0b', '#10b981'],
+      });
+
+      setTimeout(() => {
+        setEvolutionPet(evolved);
+        setIsEvolutionModalOpen(true);
+      }, 1800);
+
+      setTimeout(() => {
+        setIsPetEvolving(false);
+      }, 4500);
+    }
+  };
+
+  const handleQuickLevelUp = (petId: string, levels: number = 1, costCrystals: number = 0) => {
+    if (costCrystals > 0 && onAddDragonCrystals) {
+      if (dragonCrystals < costCrystals) return;
+      onAddDragonCrystals(-costCrystals);
+    }
+    if (onLevelUpPet) {
+      onLevelUpPet(petId, levels);
+      playLaser();
+      confetti({
+        particleCount: 35,
+        spread: 60,
+        origin: { y: 0.6 },
+      });
+    }
   };
 
   const handleEnchant = (petId: string) => {
@@ -603,10 +673,16 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
       });
       setTimeout(() => setEnchantSuccessFlash(false), 800);
 
-      // Trigger Celestial Burst & Evolution Sequence when pet reaches enchantment level 5
+      // Check if pet reached 5 stars
       if (prevLevel === 4 && targetPet) {
-        const evolvedPet: PetCompanion = { ...targetPet, enchantmentLevel: 5 };
-        triggerEvolution(evolvedPet);
+        const petAtFive: PetCompanion = { ...targetPet, enchantmentLevel: 5 };
+        // If pet has also reached Level 20, trigger the full Rarity Evolution!
+        if ((petAtFive.level || 1) >= 20) {
+          handleTriggerRarityEvolution(petAtFive);
+        } else {
+          // Trigger 5-star celestial awakening
+          triggerEvolution(petAtFive);
+        }
       }
     }
   };
@@ -634,36 +710,29 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Free Gift Giveaway Button (With 24h Cooldown Protection) */}
+            {/* Free Gift Giveaway Button (Strictly ONE-TIME ONLY) */}
             {onClaimFreeGift && (
-              <button
-                onClick={() => {
-                  onClaimFreeGift();
-                }}
-                className={`px-3 py-1.5 rounded-xl font-black text-xs shadow-lg flex items-center gap-1.5 cursor-pointer transition-all ${
-                  dailyGiftCooldownMs <= 0
-                    ? 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 text-slate-950 animate-pulse shadow-emerald-500/20'
-                    : 'bg-slate-800/90 hover:bg-slate-750 text-slate-300 border border-slate-700/80'
-                }`}
-                title={
-                  dailyGiftCooldownMs <= 0
-                    ? 'Nhận ngay Quà Tặng Điểm Danh Hàng Ngày (24h/lần)!'
-                    : `Bạn đã nhận quà hôm nay rồi! Lượt tiếp theo mở sau ${formatGiftCooldown(dailyGiftCooldownMs)}`
-                }
-              >
-                {dailyGiftCooldownMs <= 0 ? (
-                  <>
-                    <Gift className="w-3.5 h-3.5 text-slate-950" />
-                    <span>🎁 Quà Điểm Danh</span>
-                    <span className="w-2 h-2 rounded-full bg-emerald-300 animate-ping"></span>
-                  </>
-                ) : (
-                  <>
-                    <Clock className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Quà: {formatGiftCooldown(dailyGiftCooldownMs)}</span>
-                  </>
-                )}
-              </button>
+              hasClaimedFreeGift ? (
+                <div
+                  className="px-3 py-1.5 rounded-xl font-bold text-xs shadow flex items-center gap-1.5 bg-slate-800/80 text-slate-500 border border-slate-700/60 cursor-not-allowed select-none"
+                  title="Bạn đã nhận quà này rồi. Quà chỉ nhận 1 lần duy nhất cho mỗi tài khoản!"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500/70" />
+                  <span>✓ Đã Nhận Quà (1 Lần)</span>
+                </div>
+              ) : (
+                <button
+                  onClick={() => {
+                    onClaimFreeGift();
+                  }}
+                  className="px-3 py-1.5 rounded-xl font-black text-xs shadow-lg flex items-center gap-1.5 cursor-pointer transition-all bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 text-slate-950 animate-pulse shadow-emerald-500/20 active:scale-95"
+                  title="Nhận ngay Gói Quà Khởi Đầu (Chỉ nhận được 1 lần duy nhất)!"
+                >
+                  <Gift className="w-3.5 h-3.5 text-slate-950" />
+                  <span>🎁 Quà Tặng (1 Lần)</span>
+                  <span className="w-2 h-2 rounded-full bg-emerald-300 animate-ping"></span>
+                </button>
+              )
             )}
 
             {/* Dragon Crystals Wallet Display */}
@@ -729,7 +798,7 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
         </div>
 
         {/* Tab Navigation */}
-        <div className="grid grid-cols-4 gap-1 bg-slate-950/80 p-1.5 rounded-2xl my-3 border border-slate-800 shrink-0">
+        <div className="grid grid-cols-5 gap-1 bg-slate-950/80 p-1.5 rounded-2xl my-3 border border-slate-800 shrink-0">
           <button
             onClick={() => setActiveTab('eggs')}
             className={`py-2 px-1 sm:px-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
@@ -763,6 +832,22 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
             }`}
           >
             <span>✨ Enchant</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('evolve')}
+            className={`py-2 px-1 sm:px-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 relative ${
+              activeTab === 'evolve'
+                ? 'bg-gradient-to-r from-yellow-400 to-amber-500 text-slate-950 font-black shadow-lg shadow-yellow-500/20'
+                : 'text-amber-300/80 hover:text-amber-200'
+            }`}
+          >
+            <span>⚡ Tiến Hóa</span>
+            {readyToEvolveCount > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full text-[9px] bg-rose-500 text-white font-black animate-pulse shadow-sm shadow-rose-500/50">
+                {readyToEvolveCount}
+              </span>
+            )}
           </button>
 
           <button
@@ -974,6 +1059,14 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
                               <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${rarityMeta.badgeBg} ${rarityMeta.badgeText} border ${rarityMeta.borderColor}`}>
                                 {rarityMeta.icon} {rarityMeta.nameEn}
                               </span>
+                              <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-300 border border-cyan-500/40">
+                                Lv.{pet.level || 1}
+                              </span>
+                              {pet.isEvolved && (
+                                <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-400 to-purple-500 text-slate-950 shadow-sm border border-yellow-300">
+                                  👑 Thần Thú Tiến Hóa
+                                </span>
+                              )}
                               <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${classMeta.badgeStyle}`}>
                                 {classMeta.icon} {classMeta.type}
                               </span>
@@ -1012,19 +1105,31 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
 
                         {/* Action buttons */}
                         <div className="flex items-center gap-2 pt-1 border-t border-slate-900">
-                          {enchantLvl >= 5 && (
+                          {((pet.level || 1) >= 20 && enchantLvl >= 5) ? (
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setSelectedEnchantPetId(pet.id);
-                                setActiveTab('enchant');
-                                triggerEvolution(pet);
+                                setSelectedEvolvePetId(pet.id);
+                                setActiveTab('evolve');
                               }}
-                              className="py-1.5 px-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 font-black text-xs flex items-center justify-center gap-1 cursor-pointer shadow-md active:scale-95 transition-all"
-                              title="Kích hoạt hiệu ứng Celestial Burst và xem lại hoạt cảnh tiến hoá"
+                              className="py-1.5 px-3 rounded-xl bg-gradient-to-r from-yellow-400 via-amber-500 to-rose-500 hover:from-yellow-300 text-slate-950 font-black text-xs flex items-center justify-center gap-1 cursor-pointer shadow-lg shadow-yellow-500/30 animate-pulse active:scale-95 transition-all"
+                              title="Linh thú đã đạt Cấp 20 & 5 Sao Cực Hạn! Nhấn để Tiến Hóa Rarity ngay"
                             >
-                              <Crown className="w-3 h-3 text-slate-950" />
-                              <span>Tiến Hóa ★5</span>
+                              <Zap className="w-3.5 h-3.5 text-slate-950 fill-slate-950" />
+                              <span>⚡ Tiến Hóa Rarity!</span>
+                            </button>
+                          ) : (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedEvolvePetId(pet.id);
+                                setActiveTab('evolve');
+                              }}
+                              className="py-1.5 px-2.5 rounded-xl bg-amber-950/70 hover:bg-amber-900 border border-amber-500/40 text-amber-200 font-bold text-xs flex items-center justify-center gap-1 transition-all cursor-pointer"
+                              title="Xem điều kiện và tiến trình Tiến Hóa Rarity (Cấp 20 + 5 Sao)"
+                            >
+                              <Zap className="w-3 h-3 text-amber-400" />
+                              <span>Tiến Hóa</span>
                             </button>
                           )}
 
@@ -1297,16 +1402,55 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
                             <Crown className="w-4 h-4 text-yellow-400 animate-spin" />
                             <span>👑 VẠN CỔ THẦN THÚ • TRANSCENDED (5/5 STARS)</span>
                           </div>
-                          <p className="text-slate-300 text-[11px] mt-1">
-                            Linh thú đã thức tỉnh cảnh giới tối thượng với đôi cánh thiên giới, hào quang bất diệt và +160% toàn bộ thuộc tính!
-                          </p>
-                          <button
-                            onClick={() => triggerEvolution(currentEnchantPet)}
-                            className="mt-3 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 via-yellow-400 to-purple-600 hover:from-amber-400 text-slate-950 font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer shadow-lg mx-auto active:scale-95 transition-all hover:scale-105"
-                          >
-                            <Sparkles className="w-4 h-4 text-slate-950" />
-                            <span>✨ Kích Hoạt Celestial Burst & Xem Hoạt Cảnh</span>
-                          </button>
+                          {(currentEnchantPet.level || 1) >= 20 ? (
+                            <div className="mt-2 space-y-2">
+                              <p className="text-emerald-300 text-xs font-bold">
+                                🌟 Linh thú đã đạt Cấp {currentEnchantPet.level || 1} &amp; 5/5 Sao! Đã sẵn sàng TIẾN HÓA RARITY sang bậc cao hơn với Icon Độc Nhất!
+                              </p>
+                              <div className="flex flex-wrap items-center justify-center gap-2">
+                                <button
+                                  onClick={() => {
+                                    setSelectedEvolvePetId(currentEnchantPet.id);
+                                    setActiveTab('evolve');
+                                  }}
+                                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-yellow-400 via-amber-500 to-rose-500 hover:from-yellow-300 text-slate-950 font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-95 transition-all hover:scale-105"
+                                >
+                                  <Zap className="w-4 h-4 text-slate-950 fill-slate-950" />
+                                  <span>⚡ Chuyển Đến Bệ Thờ Tiến Hóa Rarity</span>
+                                </button>
+                                <button
+                                  onClick={() => handleTriggerRarityEvolution(currentEnchantPet)}
+                                  className="px-3 py-2 rounded-xl bg-purple-900 hover:bg-purple-800 text-white font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
+                                >
+                                  <Sparkles className="w-3.5 h-3.5 text-yellow-300" />
+                                  <span>Tiến Hóa Ngay</span>
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="mt-2 space-y-2">
+                              <p className="text-slate-300 text-[11px]">
+                                Đã đạt cực hạn 5 Sao! Hãy nâng cấp Linh thú lên <strong className="text-cyan-300">Cấp 20</strong> (Hiện tại: Cấp {currentEnchantPet.level || 1}/20) để kích hoạt <strong className="text-amber-300">TIẾN HÓA RARITY</strong> với Icon Độc Nhất!
+                              </p>
+                              <div className="flex flex-wrap items-center justify-center gap-2">
+                                <button
+                                  onClick={() => handleQuickLevelUp(currentEnchantPet.id, 1)}
+                                  className="px-3 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs flex items-center gap-1 cursor-pointer transition-all shadow active:scale-95"
+                                >
+                                  <span>⚡ Tăng Cấp (+1 Lv)</span>
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    const needed = Math.max(0, 20 - (currentEnchantPet.level || 1));
+                                    handleQuickLevelUp(currentEnchantPet.id, needed);
+                                  }}
+                                  className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 font-black text-xs flex items-center gap-1 cursor-pointer transition-all shadow active:scale-95 hover:scale-105"
+                                >
+                                  <span>🔥 Đột Phá Lên Cấp 20 Ngay</span>
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
 
@@ -1362,6 +1506,399 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
                           <span>⚡ Thử Nghiệm Celestial Burst Animation</span>
                         </button>
                       </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ================= TAB 3: RARITY EVOLUTION SANCTUARY ================= */}
+          {activeTab === 'evolve' && (
+            <div className="space-y-3">
+              {/* Header Banner */}
+              <div className="p-3.5 rounded-2xl bg-gradient-to-r from-purple-950/80 via-slate-900 to-amber-950/80 border border-yellow-400/40 shadow-xl relative overflow-hidden">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-yellow-500 via-amber-400 to-purple-600 flex items-center justify-center text-2xl shadow-lg shadow-yellow-500/20 shrink-0">
+                      ⚡👑
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-base font-black text-amber-300">
+                          Bệ Thờ Thức Tỉnh &amp; Tiến Hóa Thần Thú (Ascension Sanctuary)
+                        </h4>
+                        {readyToEvolveCount > 0 && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-500 text-white animate-bounce shadow-md">
+                            {readyToEvolveCount} Sẵn Sàng!
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-300 mt-0.5 max-w-2xl leading-relaxed">
+                        Điều kiện tiến hóa: <strong>Đạt Cấp Độ 20</strong> + <strong>Cực Hạn Cường Hóa 5 Sao</strong>. Thần thú sẽ lột xác sang <strong>Bậc Rarity cao hơn</strong> với <strong>Icon Độc Nhất</strong>, chỉ số vượt bậc và mở khóa tiềm năng cường hóa ở bậc mới!
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {hatchedPets.length === 0 ? (
+                <div className="text-center py-14 text-slate-400 bg-slate-950/60 rounded-2xl border border-slate-800">
+                  <div className="text-5xl mb-3 opacity-60">🥚🐾</div>
+                  <h4 className="font-bold text-base text-slate-200">Chưa có linh thú nào trong lồng ấp!</h4>
+                  <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
+                    Hãy vào tab &quot;Dragon Eggs&quot; để ấp nở trứng rồng trước khi tiến hóa.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5">
+                  {/* Left Column: Pet Selector list */}
+                  <div className="lg:col-span-4 p-3 rounded-2xl bg-slate-950/90 border border-slate-800 flex flex-col max-h-[500px]">
+                    <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-800 shrink-0">
+                      <span className="text-xs font-black text-amber-300 flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-yellow-400" />
+                        <span>Danh Sách Thú Cưng ({hatchedPets.length})</span>
+                      </span>
+                      {readyToEvolveCount > 0 && (
+                        <span className="text-[10px] text-emerald-400 font-bold bg-emerald-950/80 px-2 py-0.5 rounded-full border border-emerald-800">
+                          {readyToEvolveCount} Đủ ĐK
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="space-y-2 overflow-y-auto pr-1 flex-1 custom-scrollbar">
+                      {hatchedPets.map((pet) => {
+                        const isSelected = (currentEvolvePet?.id === pet.id);
+                        const pLevel = pet.level || 1;
+                        const pEnchant = pet.enchantmentLevel || 0;
+                        const isReady = pLevel >= 20 && pEnchant >= 5;
+                        const petRarity = getRarityConfig(pet.rarity);
+
+                        return (
+                          <div
+                            key={pet.id}
+                            onClick={() => setSelectedEvolvePetId(pet.id)}
+                            className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-2.5 ${
+                              isSelected
+                                ? 'bg-gradient-to-r from-amber-500/20 to-purple-500/20 border-yellow-400 shadow-md ring-1 ring-yellow-400/50'
+                                : isReady
+                                ? 'bg-slate-900/90 border-emerald-500/60 hover:border-emerald-400 hover:bg-emerald-950/20'
+                                : 'bg-slate-900/60 border-slate-800 hover:border-slate-700 hover:bg-slate-900'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="w-10 h-10 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-center text-xl shrink-0 relative">
+                                {pet.avatarIcon}
+                                {pet.isEvolved && (
+                                  <span className="absolute -top-1 -right-1 text-[9px] bg-amber-500 text-slate-950 font-black rounded-full px-1 shadow">
+                                    👑
+                                  </span>
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <span className={`text-[8px] font-black uppercase px-1.5 py-0.2 rounded-full ${petRarity.badgeBg} ${petRarity.badgeText}`}>
+                                    {petRarity.nameEn}
+                                  </span>
+                                  <span className="text-[9px] font-mono text-cyan-300 font-bold">
+                                    Lv.{pLevel}
+                                  </span>
+                                </div>
+                                <h5 className="font-bold text-xs text-white truncate">{pet.name}</h5>
+                                <div className="text-[10px] text-purple-300 font-semibold flex items-center gap-1">
+                                  <span>★{pEnchant}/5</span>
+                                  {isReady && (
+                                    <span className="text-emerald-400 font-black text-[9px] bg-emerald-950/80 px-1 rounded animate-pulse">
+                                      SẴN SÀNG!
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="shrink-0 text-right">
+                              {isReady ? (
+                                <span className="px-2 py-1 rounded-lg text-[9px] font-black bg-gradient-to-r from-yellow-400 to-amber-500 text-slate-950 shadow-sm animate-pulse">
+                                  TIẾN HÓA ➔
+                                </span>
+                              ) : pet.isEvolved ? (
+                                <span className="text-[9px] text-amber-300/80 font-bold">
+                                  Đã Evolve
+                                </span>
+                              ) : (
+                                <span className="text-[9px] text-slate-500 font-semibold">
+                                  Chưa Đủ ĐK
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Right Column: Metamorphosis Altar */}
+                  {currentEvolvePet ? (() => {
+                    const reqs = getEvolutionRequirements(currentEvolvePet);
+                    const comparison = getEvolutionStatComparison(currentEvolvePet);
+                    const currentRarityMeta = getRarityConfig(currentEvolvePet.rarity);
+                    const nextRarityMeta = getRarityConfig(comparison.nextRarity);
+                    const isPetReady = reqs.canEvolve;
+
+                    return (
+                      <div className="lg:col-span-8 p-4 rounded-2xl bg-slate-950 border-2 border-amber-500/50 flex flex-col justify-between gap-3 relative overflow-hidden shadow-2xl">
+                        {/* Altar Background Glow */}
+                        <div className="absolute top-0 right-0 w-72 h-72 bg-gradient-to-br from-amber-500/10 via-purple-500/10 to-transparent rounded-full blur-3xl pointer-events-none" />
+
+                        <div>
+                          {/* Altar Header */}
+                          <div className="flex items-center justify-between pb-2.5 border-b border-slate-800">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-black uppercase tracking-wider text-amber-300">
+                                Bệ Thờ Chuyển Hóa Cảnh Giới
+                              </span>
+                              {currentEvolvePet.isEvolved && (
+                                <span className="px-2 py-0.5 rounded-full bg-purple-950 text-purple-300 border border-purple-600 text-[10px] font-black">
+                                  Đã Tiến Hóa Giai Đoạn {currentEvolvePet.evolutionStage || 1}
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[11px] text-slate-400">
+                              Rank {currentEvolvePet.tierRank} ➔ Rank {comparison.nextTierRank}
+                            </span>
+                          </div>
+
+                          {/* Dual Transformation Display: Current vs Evolved Preview */}
+                          <div className="grid grid-cols-1 md:grid-cols-11 gap-2.5 my-3 items-center">
+                            {/* Form 1: Current Form */}
+                            <div className="md:col-span-5 p-3 rounded-2xl bg-slate-900/90 border border-slate-800 text-center relative overflow-hidden">
+                              <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                                DẠNG HIỆN TẠI
+                              </div>
+                              <div className="w-16 h-16 mx-auto rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-center text-4xl my-2 shadow-inner">
+                                {currentEvolvePet.avatarIcon}
+                              </div>
+                              <div className="flex items-center justify-center gap-1.5 mb-1">
+                                <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${currentRarityMeta.badgeBg} ${currentRarityMeta.badgeText}`}>
+                                  {currentRarityMeta.nameEn}
+                                </span>
+                                <span className="text-[10px] font-bold text-cyan-300">
+                                  Cấp {currentEvolvePet.level || 1}
+                                </span>
+                              </div>
+                              <h5 className="text-sm font-black text-white truncate">{currentEvolvePet.name}</h5>
+                              <div className="text-[10px] text-purple-300 font-semibold mt-0.5">
+                                Cường hóa: ★{currentEvolvePet.enchantmentLevel || 0}/5
+                              </div>
+
+                              <div className="grid grid-cols-3 gap-1 mt-2.5 pt-2 border-t border-slate-800/80 text-[10px] font-mono">
+                                <div className="text-rose-300">HP {comparison.current.maxHp}</div>
+                                <div className="text-amber-300">ATK {comparison.current.atk}</div>
+                                <div className="text-blue-300">DEF {comparison.current.def}</div>
+                              </div>
+                            </div>
+
+                            {/* Center Gateway / Transformation Arrow */}
+                            <div className="md:col-span-1 flex flex-col items-center justify-center text-center py-1">
+                              <div className="w-9 h-9 rounded-full bg-gradient-to-r from-amber-500 to-purple-600 flex items-center justify-center text-slate-950 font-black shadow-lg shadow-yellow-500/30 animate-pulse">
+                                ➔
+                              </div>
+                              <span className="text-[8px] font-black uppercase tracking-widest text-amber-300 mt-1">
+                                EVOLVE
+                              </span>
+                            </div>
+
+                            {/* Form 2: Ascended Evolved Form Preview with Unique Icon */}
+                            <div className="md:col-span-5 p-3 rounded-2xl bg-gradient-to-b from-amber-500/10 via-purple-900/20 to-slate-900 border-2 border-yellow-400/80 text-center relative overflow-hidden shadow-xl shadow-yellow-500/10">
+                              <div className="absolute top-1.5 right-1.5">
+                                <span className="px-1.5 py-0.5 rounded-full bg-yellow-400/20 text-yellow-300 font-black text-[8px] uppercase tracking-wider border border-yellow-400">
+                                  BẬC MỚI
+                                </span>
+                              </div>
+                              <div className="text-[10px] font-black text-yellow-400 uppercase tracking-widest mb-1 flex items-center justify-center gap-1">
+                                <Sparkles className="w-3 h-3 text-yellow-400 animate-spin" />
+                                <span>THẦN THÚ SAU TIẾN HÓA</span>
+                              </div>
+
+                              {/* Unique Evolved Icon Preview with Celestial Aura */}
+                              <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-tr from-purple-950 via-slate-900 to-amber-950 border-2 border-yellow-400 flex items-center justify-center text-4xl my-2 shadow-lg shadow-yellow-400/40 relative">
+                                <span className="animate-bounce">{comparison.evolvedIcon}</span>
+                                <span className="absolute -top-1 -right-1 text-xs">✨</span>
+                              </div>
+
+                              <div className="flex items-center justify-center gap-1.5 mb-1">
+                                <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${nextRarityMeta.badgeBg} ${nextRarityMeta.badgeText} ring-1 ring-yellow-400/60`}>
+                                  {nextRarityMeta.nameEn}
+                                </span>
+                                <span className="text-[10px] font-bold text-emerald-300">
+                                  Cấp {Math.max(20, currentEvolvePet.level || 20)}
+                                </span>
+                              </div>
+                              <h5 className="text-sm font-black text-yellow-300 truncate">
+                                {comparison.evolvedName}
+                              </h5>
+                              <div className="text-[10px] text-amber-200/90 font-semibold mt-0.5">
+                                Tiềm năng mới: ★0/5 (Tiếp tục cường hóa)
+                              </div>
+
+                              <div className="grid grid-cols-3 gap-1 mt-2.5 pt-2 border-t border-slate-800/80 text-[10px] font-mono">
+                                <div className="text-rose-300 font-bold">
+                                  HP {comparison.evolvedBase.maxHp} <span className="text-emerald-400 text-[9px]">(+{comparison.hpGain})</span>
+                                </div>
+                                <div className="text-amber-300 font-bold">
+                                  ATK {comparison.evolvedBase.atk} <span className="text-emerald-400 text-[9px]">(+{comparison.atkGain})</span>
+                                </div>
+                                <div className="text-blue-300 font-bold">
+                                  DEF {comparison.evolvedBase.def} <span className="text-emerald-400 text-[9px]">(+{comparison.defGain})</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Evolution Requirements Checklist */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 p-3 rounded-2xl bg-slate-900/90 border border-slate-800 text-xs">
+                            {/* Requirement 1: Level 20+ */}
+                            <div className={`p-2.5 rounded-xl border flex flex-col justify-between gap-2 ${
+                              reqs.isLevelMet
+                                ? 'bg-emerald-950/30 border-emerald-500/50 text-emerald-200'
+                                : 'bg-slate-950/80 border-amber-500/40 text-slate-300'
+                            }`}>
+                              <div className="flex items-center justify-between gap-1">
+                                <div className="flex items-center gap-1.5 font-bold">
+                                  {reqs.isLevelMet ? (
+                                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                                  ) : (
+                                    <Clock className="w-4 h-4 text-amber-400 shrink-0" />
+                                  )}
+                                  <span>1. Đạt Cấp Độ 20+</span>
+                                </div>
+                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                                  reqs.isLevelMet
+                                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-400'
+                                    : 'bg-amber-500/20 text-amber-300 border border-amber-400'
+                                }`}>
+                                  {reqs.currentLevel}/20
+                                </span>
+                              </div>
+
+                              <p className="text-[10px] text-slate-400">
+                                {reqs.isLevelMet
+                                  ? '✓ Đã hội tụ đủ cấp độ tối thiểu để mở khóa cảnh giới mới.'
+                                  : `Cần thêm ${reqs.levelNeeded} cấp độ nữa để mở khóa bệ thờ.`}
+                              </p>
+
+                              {/* Level Up Helper Buttons */}
+                              <div className="flex items-center gap-1.5 pt-1">
+                                <button
+                                  onClick={() => handleQuickLevelUp(currentEvolvePet.id, 1)}
+                                  className="flex-1 py-1 px-2 rounded-lg bg-cyan-950/90 hover:bg-cyan-900 border border-cyan-500/40 text-cyan-200 font-bold text-[10px] flex items-center justify-center gap-1 cursor-pointer transition-all active:scale-95"
+                                  title="Tăng 1 cấp độ cho thần thú"
+                                >
+                                  <span>⚡ +1 Cấp</span>
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    const needed = Math.max(0, 20 - (currentEvolvePet.level || 1));
+                                    handleQuickLevelUp(currentEvolvePet.id, needed);
+                                  }}
+                                  className="flex-1 py-1 px-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-[10px] flex items-center justify-center gap-1 cursor-pointer transition-all active:scale-95"
+                                  title="Đột phá cấp độ lên thẳng Cấp 20 để trải nghiệm tính năng Tiến Hóa"
+                                >
+                                  <span>🔥 Lên Lv.20</span>
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Requirement 2: 5/5 Stars Enchantment */}
+                            <div className={`p-2.5 rounded-xl border flex flex-col justify-between gap-2 ${
+                              reqs.isEnchantmentMet
+                                ? 'bg-emerald-950/30 border-emerald-500/50 text-emerald-200'
+                                : 'bg-slate-950/80 border-amber-500/40 text-slate-300'
+                            }`}>
+                              <div className="flex items-center justify-between gap-1">
+                                <div className="flex items-center gap-1.5 font-bold">
+                                  {reqs.isEnchantmentMet ? (
+                                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                                  ) : (
+                                    <Clock className="w-4 h-4 text-amber-400 shrink-0" />
+                                  )}
+                                  <span>2. Cường Hóa 5/5 Sao Cực Hạn</span>
+                                </div>
+                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                                  reqs.isEnchantmentMet
+                                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-400'
+                                    : 'bg-purple-500/20 text-purple-300 border border-purple-400'
+                                }`}>
+                                  {reqs.currentEnchantment}/5 ★
+                                </span>
+                              </div>
+
+                              <p className="text-[10px] text-slate-400">
+                                {reqs.isEnchantmentMet
+                                  ? '✓ Đã đạt cực hạn 5 sao. Tinh hoa thức tỉnh đã sẵn sàng giải phóng!'
+                                  : `Cần cường hóa lên 5 sao (còn thiếu ${reqs.enchantmentNeeded} sao).`}
+                              </p>
+
+                              {/* Enchant Helper Buttons */}
+                              <div className="flex items-center gap-1.5 pt-1">
+                                <button
+                                  onClick={() => {
+                                    setSelectedEnchantPetId(currentEvolvePet.id);
+                                    setActiveTab('enchant');
+                                  }}
+                                  className="flex-1 py-1 px-2 rounded-lg bg-purple-950/90 hover:bg-purple-900 border border-purple-500/40 text-purple-200 font-bold text-[10px] flex items-center justify-center gap-1 cursor-pointer transition-all active:scale-95"
+                                >
+                                  <Sparkles className="w-3 h-3 text-purple-400" />
+                                  <span>Đến Đền Cường Hóa</span>
+                                </button>
+                                {!reqs.isEnchantmentMet && (
+                                  <button
+                                    onClick={() => handleEnchant(currentEvolvePet.id)}
+                                    className="flex-1 py-1 px-2 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-black text-[10px] flex items-center justify-center gap-1 cursor-pointer transition-all active:scale-95"
+                                    title="Cường hóa nhanh +1 Sao nếu đủ Crystals"
+                                  >
+                                    <span>💎 Enchant +1★</span>
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Main Evolution Action Button */}
+                        <div className="pt-2">
+                          {isPetReady ? (
+                            <button
+                              id="execute-rarity-evolution-btn"
+                              onClick={() => handleTriggerRarityEvolution(currentEvolvePet)}
+                              className="w-full py-3.5 px-5 rounded-2xl bg-gradient-to-r from-yellow-400 via-amber-500 to-purple-600 hover:from-yellow-300 text-slate-950 font-black text-sm uppercase tracking-wider flex items-center justify-center gap-2.5 cursor-pointer shadow-2xl shadow-yellow-500/40 hover:scale-[1.01] active:scale-98 transition-all ring-2 ring-yellow-400 animate-pulse"
+                            >
+                              <Crown className="w-5 h-5 text-slate-950" />
+                              <span>⚡ KÍCH HOẠT TIẾN HÓA RARITY • THỨC TỈNH BẬC {nextRarityMeta.nameEn.toUpperCase()} ⚡</span>
+                              <Sparkles className="w-5 h-5 text-slate-950" />
+                            </button>
+                          ) : (
+                            <div className="space-y-1 text-center">
+                              <button
+                                disabled
+                                className="w-full py-3 px-5 rounded-2xl bg-slate-900 text-slate-500 font-bold text-xs flex items-center justify-center gap-2 cursor-not-allowed border border-slate-800"
+                              >
+                                <Lock className="w-4 h-4 text-slate-600" />
+                                <span>
+                                  Chưa Đủ Điều Kiện: Cần Cấp 20 ({reqs.currentLevel}/20) và Cường Hóa 5 Sao ({reqs.currentEnchantment}/5★)
+                                </span>
+                              </button>
+                              <p className="text-[11px] text-amber-400/80">
+                                💡 Nhấn vào các nút trợ giúp ở trên để tăng cấp và cường hóa thần thú nhanh chóng!
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })() : (
+                    <div className="lg:col-span-8 p-8 rounded-2xl bg-slate-950 border border-slate-800 text-center text-slate-400">
+                      Vui lòng chọn một thần thú ở danh sách bên trái để xem bệ thờ tiến hóa.
                     </div>
                   )}
                 </div>
@@ -1666,6 +2203,29 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
                 >
                   ✨ Open in Enchantment Shrine
                 </button>
+                {((inspectPet.level || 1) >= 20 && (inspectPet.enchantmentLevel || 0) >= 5) ? (
+                  <button
+                    onClick={() => {
+                      setSelectedEvolvePetId(inspectPet.id);
+                      setActiveTab('evolve');
+                      setInspectPet(null);
+                    }}
+                    className="py-2 px-3 bg-gradient-to-r from-yellow-400 via-amber-500 to-rose-500 hover:from-yellow-300 text-slate-950 font-black text-xs rounded-xl cursor-pointer shadow-lg animate-pulse"
+                  >
+                    ⚡ Tiến Hóa Rarity
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setSelectedEvolvePetId(inspectPet.id);
+                      setActiveTab('evolve');
+                      setInspectPet(null);
+                    }}
+                    className="py-2 px-3 bg-amber-950/80 hover:bg-amber-900 border border-amber-500/40 text-amber-200 font-bold text-xs rounded-xl cursor-pointer"
+                  >
+                    ⚡ Bệ Thờ Tiến Hóa
+                  </button>
+                )}
                 <button
                   onClick={() => setInspectPet(null)}
                   className="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl cursor-pointer"
@@ -1681,7 +2241,13 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
         <PetEvolutionModal
           isOpen={isEvolutionModalOpen}
           pet={evolutionPet}
-          onClose={() => setIsEvolutionModalOpen(false)}
+          preEvolutionPet={preEvolutionPet}
+          isRarityEvolution={isRarityEvolutionActive}
+          onClose={() => {
+            setIsEvolutionModalOpen(false);
+            setPreEvolutionPet(null);
+            setIsRarityEvolutionActive(false);
+          }}
         />
       </div>
     </div>

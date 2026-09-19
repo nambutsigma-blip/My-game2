@@ -54,6 +54,13 @@ import {
 import { PetCompanion, StolenEgg } from '../types';
 import { playSuccessChime, playLaser, playAlertUp } from '../utils/soundEffects';
 import { PokemonPetVisual } from './PokemonPetVisual';
+import {
+  AppUser,
+  loginWithGoogle,
+  loginWithFastCloud,
+  logoutUser,
+  getStoredUser,
+} from '../utils/authHelper';
 
 interface OnlineMultiplayerModalProps {
   isOpen: boolean;
@@ -70,6 +77,9 @@ interface OnlineMultiplayerModalProps {
   onResetAllAccounts?: () => void;
   accountName?: string;
   onOpenSetAccountName?: () => void;
+  currentUser?: AppUser | null;
+  onUserChange?: (user: AppUser | null) => void;
+  onOpenAuth?: () => void;
 }
 
 export interface OnlinePlayer {
@@ -150,8 +160,11 @@ export const OnlineMultiplayerModal: React.FC<OnlineMultiplayerModalProps> = ({
   onResetAllAccounts,
   accountName,
   onOpenSetAccountName,
+  currentUser: propUser,
+  onUserChange,
+  onOpenAuth,
 }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | AppUser | null>(propUser || getStoredUser() || null);
   const [loadingAuth, setLoadingAuth] = useState(false);
   const [activeTab, setActiveTab] = useState<'lobby' | 'trade' | 'donate' | 'leaderboard'>('lobby');
   const [donateSubTab, setDonateSubTab] = useState<'send' | 'inbox' | 'sent'>('send');
@@ -209,15 +222,42 @@ export const OnlineMultiplayerModal: React.FC<OnlineMultiplayerModalProps> = ({
     });
   }, [allAccounts, accountSearchQuery, user]);
 
+  // Sync propUser if changed
+  useEffect(() => {
+    if (propUser !== undefined) {
+      setUser(propUser);
+      if (propUser) {
+        fetchAllData(propUser);
+      }
+    }
+  }, [propUser]);
+
   // Monitor Auth State
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
-      if (currentUser) {
-        await syncUserToFirestore(currentUser);
-        fetchAllData(currentUser);
+    const unsubscribe = onAuthStateChanged(auth, async (gUser) => {
+      if (gUser) {
+        const mapped: AppUser = {
+          uid: gUser.uid,
+          displayName: gUser.displayName || 'Nhà Thám Hiểm',
+          email: gUser.email,
+          photoURL: gUser.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(gUser.uid)}`,
+          authProvider: 'google',
+        };
+        setUser(mapped);
+        onUserChange?.(mapped);
+        await syncUserToFirestore(mapped);
+        fetchAllData(mapped);
       } else {
-        fetchAllData();
+        const stored = getStoredUser();
+        if (stored && stored.authProvider === 'cloud_fast') {
+          setUser(stored);
+          onUserChange?.(stored);
+          fetchAllData(stored);
+        } else if (!propUser) {
+          setUser(null);
+          onUserChange?.(null);
+          fetchAllData();
+        }
       }
     });
     return () => unsubscribe();
@@ -230,7 +270,7 @@ export const OnlineMultiplayerModal: React.FC<OnlineMultiplayerModalProps> = ({
     }
   }, [isOpen]);
 
-  const fetchAllData = async (currentUser?: User | null) => {
+  const fetchAllData = async (currentUser?: User | AppUser | null) => {
     const u = currentUser || user;
     await Promise.allSettled([
       fetchRegisteredAccounts(),
@@ -244,15 +284,58 @@ export const OnlineMultiplayerModal: React.FC<OnlineMultiplayerModalProps> = ({
     try {
       setLoadingAuth(true);
       playAlertUp();
-      const result = await signInWithPopup(auth, googleProvider);
-      setUser(result.user);
-      await syncUserToFirestore(result.user);
-      playSuccessChime();
-      confetti({ particleCount: 50, spread: 60, origin: { y: 0.7 } });
-      await fetchAllData(result.user);
+      const result = await loginWithGoogle();
+
+      if (result.success && result.user) {
+        setUser(result.user);
+        onUserChange?.(result.user);
+        await syncUserToFirestore(result.user);
+        playSuccessChime();
+        confetti({ particleCount: 50, spread: 60, origin: { y: 0.7 } });
+        await fetchAllData(result.user);
+      } else if (result.error) {
+        if (result.error.isUnauthorizedDomain || result.error.isPopupBlocked) {
+          // Seamless fallback to Fast Cloud Login so user is NEVER blocked!
+          const fastUser = await loginWithFastCloud(accountName || 'Nhà Thám Hiểm');
+          setUser(fastUser);
+          onUserChange?.(fastUser);
+          await syncUserToFirestore(fastUser);
+          playSuccessChime();
+          confetti({ particleCount: 50, spread: 60, origin: { y: 0.7 } });
+          await fetchAllData(fastUser);
+          setSyncStatus('⚡ Đã kích hoạt Đăng Nhập Nhanh (do tên miền chưa cấp phép Google OAuth)');
+        } else {
+          alert('Đăng nhập Google: ' + (result.error.message || 'Lỗi'));
+        }
+      }
     } catch (err: any) {
       console.error('Google Auth Error:', err);
-      alert('Đăng nhập Google thất bại: ' + (err.message || 'Lỗi không xác định'));
+      // Fallback
+      const fastUser = await loginWithFastCloud(accountName || 'Nhà Thám Hiểm');
+      setUser(fastUser);
+      onUserChange?.(fastUser);
+      await syncUserToFirestore(fastUser);
+      await fetchAllData(fastUser);
+      setSyncStatus('⚡ Đã đăng nhập nhanh qua Cloud ID');
+    } finally {
+      setLoadingAuth(false);
+    }
+  };
+
+  const handleFastCloudLoginDirect = async () => {
+    try {
+      setLoadingAuth(true);
+      playAlertUp();
+      const fastUser = await loginWithFastCloud(accountName || 'Nhà Thám Hiểm');
+      setUser(fastUser);
+      onUserChange?.(fastUser);
+      await syncUserToFirestore(fastUser);
+      playSuccessChime();
+      confetti({ particleCount: 50, spread: 60, origin: { y: 0.7 } });
+      await fetchAllData(fastUser);
+      setSyncStatus('⚡ Đã đăng nhập Cloud thành công!');
+    } catch (err: any) {
+      console.error('Fast Cloud Login Error:', err);
     } finally {
       setLoadingAuth(false);
     }
@@ -260,8 +343,9 @@ export const OnlineMultiplayerModal: React.FC<OnlineMultiplayerModalProps> = ({
 
   const handleLogout = async () => {
     try {
-      await signOut(auth);
+      await logoutUser();
       setUser(null);
+      onUserChange?.(null);
       setIncomingGifts([]);
       setSentGifts([]);
       onUpdatePendingGiftsCount?.(0);
@@ -272,7 +356,7 @@ export const OnlineMultiplayerModal: React.FC<OnlineMultiplayerModalProps> = ({
     }
   };
 
-  const syncUserToFirestore = async (currentUser: User) => {
+  const syncUserToFirestore = async (currentUser: User | AppUser) => {
     if (!currentUser) return;
     try {
       const bestPet = hatchedPets.length > 0 ? hatchedPets[0] : null;
@@ -1034,14 +1118,35 @@ export const OnlineMultiplayerModal: React.FC<OnlineMultiplayerModalProps> = ({
                 </button>
               </div>
             ) : (
-              <button
-                onClick={handleGoogleLogin}
-                disabled={loadingAuth}
-                className="px-4 py-2 rounded-xl bg-gradient-to-r from-red-600 to-amber-600 hover:from-red-500 text-white font-black text-xs flex items-center gap-2 shadow-lg cursor-pointer active:scale-95 transition-all"
-              >
-                <LogIn className="w-4 h-4" />
-                <span>Đăng Nhập Với Google</span>
-              </button>
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <button
+                  onClick={handleFastCloudLoginDirect}
+                  disabled={loadingAuth}
+                  className="px-3 py-2 rounded-xl bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 hover:from-amber-400 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-md shadow-amber-950/40 cursor-pointer active:scale-95 transition-all disabled:opacity-50"
+                  title="Đăng nhập ngay lập tức - Hoạt động 100% trên bản ngoài mà không cần Google OAuth"
+                >
+                  <Zap className="w-3.5 h-3.5 fill-slate-950" />
+                  <span>Đăng Nhập Nhanh</span>
+                </button>
+                <button
+                  onClick={handleGoogleLogin}
+                  disabled={loadingAuth}
+                  className="px-3 py-2 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 text-white font-black text-xs flex items-center gap-1.5 shadow-md shadow-rose-950/40 cursor-pointer active:scale-95 transition-all disabled:opacity-50"
+                  title="Đăng nhập bằng tài khoản Google (Yêu cầu domain đã cấp phép trong Firebase)"
+                >
+                  <LogIn className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Google</span>
+                </button>
+                {onOpenAuth && (
+                  <button
+                    onClick={onOpenAuth}
+                    className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-bold cursor-pointer transition-colors"
+                    title="Mở bảng điều khiển xác thực & hướng dẫn tên miền"
+                  >
+                    <Globe className="w-3.5 h-3.5 text-indigo-400" />
+                  </button>
+                )}
+              </div>
             )}
           </div>
         </div>

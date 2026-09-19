@@ -197,6 +197,11 @@ export interface PetCompanion {
   isFavorite?: boolean; // Pinned to top of companion list
   appearance?: PetAppearance;
   moves?: PokemonBattleMove[];
+  isEvolved?: boolean; // True when pet has undergone rarity evolution
+  evolutionStage?: number; // 1 for first evolution, 2 for second, etc.
+  originalName?: string; // Pre-evolution base name
+  originalRarity?: CreatureRarity; // Pre-evolution original rarity
+  originalAvatarIcon?: string; // Pre-evolution icon
 }
 
 export interface StolenEgg {

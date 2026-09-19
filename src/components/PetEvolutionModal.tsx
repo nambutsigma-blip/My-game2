@@ -1,16 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { Sparkles, Swords, Shield, Heart, Award, X, RotateCcw, Check, Zap, Crown } from 'lucide-react';
+import { Sparkles, Swords, Shield, Heart, Award, X, RotateCcw, Check, Zap, Crown, ArrowRight } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { PetCompanion } from '../types';
 import { EvolvedPetSprite, getElementAuraColors } from './EvolvedPetSprite';
 import { CelestialEvolutionBurst } from './CelestialEvolutionBurst';
 import { calculatePetStats } from '../data/arenaData';
+import { getRarityConfig } from '../data/creaturesData';
 import { playEvolutionSound, playMythicFanfare, playEnchantSound } from '../utils/soundEffects';
 
 interface PetEvolutionModalProps {
   isOpen: boolean;
   pet: PetCompanion | null;
   onClose: () => void;
+  preEvolutionPet?: PetCompanion | null;
+  isRarityEvolution?: boolean;
 }
 
 type EvolutionPhase = 'gathering' | 'cocoon' | 'awakening' | 'showcase';
@@ -19,6 +22,8 @@ export const PetEvolutionModal: React.FC<PetEvolutionModalProps> = ({
   isOpen,
   pet,
   onClose,
+  preEvolutionPet,
+  isRarityEvolution,
 }) => {
   const [phase, setPhase] = useState<EvolutionPhase>('gathering');
   const [showFlash, setShowFlash] = useState(false);
@@ -121,9 +126,24 @@ export const PetEvolutionModal: React.FC<PetEvolutionModalProps> = ({
 
   if (!isOpen || !pet) return null;
 
+  const isRarity = isRarityEvolution || !!preEvolutionPet || pet.isEvolved;
+  const oldPet = preEvolutionPet || {
+    ...pet,
+    name: pet.originalName || pet.name.replace(/\s*\(.*?Awakened\)/i, ''),
+    rarity: pet.originalRarity || pet.rarity,
+    avatarIcon: pet.originalAvatarIcon || pet.avatarIcon,
+    tierRank: Math.max(1, (pet.tierRank || 2) - 1),
+    enchantmentLevel: 5,
+  };
+
+  const oldRarityMeta = getRarityConfig(oldPet.rarity);
+  const newRarityMeta = getRarityConfig(pet.rarity);
+
+  const baseStats = calculatePetStats(oldPet);
+  const evolvedStats = calculatePetStats(pet);
+
+  const activeDisplayPet = phase === 'gathering' || phase === 'cocoon' ? oldPet : pet;
   const elementColors = getElementAuraColors(pet.element);
-  const baseStats = calculatePetStats({ ...pet, enchantmentLevel: 4 });
-  const evolvedStats = calculatePetStats({ ...pet, enchantmentLevel: 5 });
 
   return (
     <div
@@ -160,21 +180,21 @@ export const PetEvolutionModal: React.FC<PetEvolutionModalProps> = ({
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-950/80 border border-amber-400/60 text-[11px] font-black uppercase tracking-widest text-amber-300 shadow-lg">
             <Crown className="w-3.5 h-3.5 text-yellow-400 animate-spin" />
             <span>
-              {phase === 'gathering' && 'Giai Đoạn 1: Ngưng Tụ Tinh Hoa Rồng Thần'}
-              {phase === 'cocoon' && 'Giai Đoạn 2: Phá Vỡ Giới Hạn Phàm Thể'}
-              {phase === 'awakening' && 'Giai Đoạn 3: Đôi Cánh Thần Thoại Thức Tỉnh!'}
-              {phase === 'showcase' && 'TIẾN HOÁ HOÀN TẤT • VẠN CỔ THẦN THÚ'}
+              {phase === 'gathering' && 'Giai Đoạn 1: Tụ Tinh Hoa Cấp 20 & 5 Sao'}
+              {phase === 'cocoon' && 'Giai Đoạn 2: Phá Vỡ Giới Hạn Huyết Mạch'}
+              {phase === 'awakening' && (isRarity ? `Giai Đoạn 3: Thức Tỉnh Rarity Bậc ${newRarityMeta.nameEn.toUpperCase()}!` : 'Giai Đoạn 3: Đôi Cánh Thần Thoại Thức Tỉnh!')}
+              {phase === 'showcase' && (isRarity ? `TIẾN HOÁ RARITY HOÀN TẤT • BẬC ${newRarityMeta.nameEn.toUpperCase()}` : 'TIẾN HOÁ HOÀN TẤT • VẠN CỔ THẦN THÚ')}
             </span>
           </div>
 
           <h3 className="text-2xl sm:text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-yellow-200 to-amber-400 mt-1.5 tracking-tight">
-            {phase === 'showcase' ? `${pet.name} (Transcended Form)` : `Tiến Hoá Cấp 5: ${pet.name}`}
+            {phase === 'showcase' ? pet.name : (isRarity ? `Tiến Hóa Rarity: ${oldPet.name}` : `Tiến Hóa Cấp 5: ${pet.name}`)}
           </h3>
           <p className="text-xs text-slate-300 mt-1 font-medium max-w-md mx-auto">
-            {phase === 'gathering' && 'Hàng triệu tinh thể rồng đang hợp nhất, khai mở huyết mạch cổ đại...'}
-            {phase === 'cocoon' && 'Kén ánh sáng bao bọc, cấu trúc linh hồn đang chuyển hóa thành bậc Thần Thánh!'}
-            {phase === 'awakening' && 'Đôi cánh thiên giới bùng nổ, hào quang vương giả ngập tràn thiên địa!'}
-            {phase === 'showcase' && 'Linh thú đã đạt cảnh giới tối cao 5 Sao, tăng vọt 160% toàn bộ thuộc tính và sở hữu đôi cánh thần thánh!'}
+            {phase === 'gathering' && 'Hàng triệu tinh hoa rồng kết hợp cùng kinh nghiệm chiến đấu cấp 20 đang thức tỉnh huyết mạch cổ...'}
+            {phase === 'cocoon' && 'Kén ánh sáng bao bọc, cấu trúc linh hồn đang thăng hoa sang bậc Rarity hoàn toàn mới!'}
+            {phase === 'awakening' && `Hào quang độc nhất bùng nổ, ${pet.name} đã thức tỉnh biểu tượng vương giả và hình thái tối thượng!`}
+            {phase === 'showcase' && `Linh thú đã thành công tiến hoá lên bậc ${newRarityMeta.nameEn} với Icon Độc Nhất (${pet.avatarIcon}), chỉ số vượt trội và sẵn sàng tiếp tục cường hóa!`}
           </p>
         </div>
 
@@ -186,7 +206,7 @@ export const PetEvolutionModal: React.FC<PetEvolutionModalProps> = ({
               {/* Converging energy rings */}
               <div className="absolute w-44 h-44 rounded-full border-2 border-amber-400/60 animate-ping opacity-60 pointer-events-none" />
               <div className="absolute w-56 h-56 rounded-full border border-purple-400/50 animate-pulse pointer-events-none" />
-              <EvolvedPetSprite pet={pet} size="xl" isEvolved={false} />
+              <EvolvedPetSprite pet={oldPet} size="xl" isEvolved={false} />
             </div>
           )}
 
@@ -202,7 +222,7 @@ export const PetEvolutionModal: React.FC<PetEvolutionModalProps> = ({
 
               {/* Sprite transforming inside cocoon */}
               <div className="filter brightness-200 contrast-125 scale-110 transition-all duration-700">
-                <EvolvedPetSprite pet={pet} size="giant" isEvolved={false} />
+                <EvolvedPetSprite pet={activeDisplayPet} size="giant" isEvolved={false} />
               </div>
             </div>
           )}
@@ -233,9 +253,39 @@ export const PetEvolutionModal: React.FC<PetEvolutionModalProps> = ({
           />
         </div>
 
-        {/* Stats & Perk Boost Showcase (Revealed when reaching phase 4) */}
+        {/* Stats & Transformation Showcase (Revealed when reaching phase 4) */}
         {phase === 'showcase' && (
           <div className="w-full relative z-20 mt-3 animate-fade-in space-y-3">
+            {/* Metamorphosis Before & After Transformation Banner */}
+            <div className="flex items-center justify-center gap-3 p-3 rounded-2xl bg-slate-900/90 border border-amber-400/50 max-w-lg mx-auto">
+              <div className="flex items-center gap-2">
+                <span className="text-3xl p-1.5 rounded-xl bg-slate-950 border border-slate-800 shadow-inner">
+                  {oldPet.avatarIcon}
+                </span>
+                <div className="text-left">
+                  <div className="text-[10px] text-slate-400 font-bold uppercase">{oldRarityMeta.nameEn}</div>
+                  <div className="text-xs font-bold text-slate-300 truncate max-w-[110px]">{oldPet.name}</div>
+                </div>
+              </div>
+
+              <div className="flex flex-col items-center px-1">
+                <span className="text-[9px] font-black text-amber-400 uppercase tracking-wider">Tiến Hóa</span>
+                <ArrowRight className="w-5 h-5 text-amber-400 animate-pulse shrink-0" />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-3xl p-1.5 rounded-xl bg-slate-950 border-2 border-yellow-400 shadow-lg shadow-yellow-400/40 animate-bounce">
+                  {pet.avatarIcon}
+                </span>
+                <div className="text-left">
+                  <div className={`text-[10px] font-black uppercase ${newRarityMeta.badgeText}`}>
+                    {newRarityMeta.icon} {newRarityMeta.nameEn} (Rank {pet.tierRank})
+                  </div>
+                  <div className="text-xs font-black text-amber-300 truncate max-w-[130px]">{pet.name}</div>
+                </div>
+              </div>
+            </div>
+
             {/* Stat comparison grid */}
             <div className="grid grid-cols-3 gap-2.5 max-w-lg mx-auto">
               <div className="p-2.5 rounded-2xl bg-slate-900/90 border border-rose-500/30 text-center shadow-md">
@@ -244,7 +294,7 @@ export const PetEvolutionModal: React.FC<PetEvolutionModalProps> = ({
                 </div>
                 <div className="text-base font-black text-white">{evolvedStats.maxHp}</div>
                 <div className="text-[10px] text-emerald-400 font-bold">
-                  +{evolvedStats.maxHp - baseStats.maxHp} (+160% Total)
+                  +{Math.max(0, evolvedStats.maxHp - baseStats.maxHp)} (Tăng Cường)
                 </div>
               </div>
 
@@ -254,7 +304,7 @@ export const PetEvolutionModal: React.FC<PetEvolutionModalProps> = ({
                 </div>
                 <div className="text-base font-black text-white">{evolvedStats.atk}</div>
                 <div className="text-[10px] text-emerald-400 font-bold">
-                  +{evolvedStats.atk - baseStats.atk} (+160% Total)
+                  +{Math.max(0, evolvedStats.atk - baseStats.atk)} (Tăng Cường)
                 </div>
               </div>
 
@@ -264,7 +314,7 @@ export const PetEvolutionModal: React.FC<PetEvolutionModalProps> = ({
                 </div>
                 <div className="text-base font-black text-white">{evolvedStats.def}</div>
                 <div className="text-[10px] text-emerald-400 font-bold">
-                  +{evolvedStats.def - baseStats.def} (+90% Total)
+                  +{Math.max(0, evolvedStats.def - baseStats.def)} (Tăng Cường)
                 </div>
               </div>
             </div>
@@ -272,17 +322,17 @@ export const PetEvolutionModal: React.FC<PetEvolutionModalProps> = ({
             {/* Unlocked Divine Passive Banner */}
             <div className="p-3 rounded-2xl bg-gradient-to-r from-purple-950/80 via-slate-900 to-amber-950/80 border border-yellow-400/50 max-w-lg mx-auto text-left flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-400 to-purple-600 flex items-center justify-center text-xl shrink-0 shadow-lg">
-                🪽
+                👑
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5 text-xs font-black text-yellow-300 uppercase">
-                  <span>Thiên Cánh & Long Uy Tối Thượng</span>
+                  <span>Icon Độc Nhất: {pet.avatarIcon} • Hào Quang {newRarityMeta.nameEn}</span>
                   <span className="text-[10px] bg-amber-400/20 text-amber-300 px-1.5 py-0.2 rounded border border-amber-400/40">
-                    5★ Perk
+                    Bậc Mới
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-300 truncate">
-                  Tăng 35% tỉ lệ chí mạng trong Đấu Trường Rồng và kích hoạt Hào Quang Bất Diệt!
+                  {pet.buffDescription}
                 </p>
               </div>
             </div>

@@ -1,6 +1,7 @@
 import React from 'react';
-import { HelpCircle, Flame, Egg, Swords, ChevronLeft, ChevronRight, Sparkles, Zap, BookOpen, Globe, Palette, RotateCcw, Edit3, User, Brain } from 'lucide-react';
+import { HelpCircle, Flame, Egg, Swords, ChevronLeft, ChevronRight, Sparkles, Zap, BookOpen, Globe, Palette, RotateCcw, Edit3, User, Brain, LogIn } from 'lucide-react';
 import { UnitData, StolenEgg } from '../types';
+import { AppUser } from '../utils/authHelper';
 
 interface NavbarProps {
   units: UnitData[];
@@ -26,6 +27,8 @@ interface NavbarProps {
   accountName?: string;
   onOpenSetAccountName?: () => void;
   onOpenAiAssistant?: () => void;
+  currentUser?: AppUser | null;
+  onOpenAuth?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -51,6 +54,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   accountName,
   onOpenSetAccountName,
   onOpenAiAssistant,
+  currentUser,
+  onOpenAuth,
 }) => {
   const currentIndex = units.findIndex((u) => u.id === currentUnitId);
   const prevUnit = currentIndex > 0 ? units[currentIndex - 1] : null;
@@ -163,6 +168,39 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Quick Actions: Study & AI, Crystals, Arena, Hatchery & Rules */}
         <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Cloud Auth / Login Button directly accessible from Navbar */}
+          {onOpenAuth && (
+            currentUser ? (
+              <button
+                id="nav-user-profile-btn"
+                onClick={onOpenAuth}
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-900/95 hover:bg-slate-850 border border-emerald-500/50 hover:border-emerald-400 text-xs font-bold text-emerald-200 cursor-pointer transition-all active:scale-95 shadow-sm"
+                title="Tài khoản Cloud đang hoạt động - Bấm để quản lý hoặc đồng bộ"
+              >
+                <div className="relative flex items-center justify-center">
+                  <div className="w-2 h-2 rounded-full bg-emerald-400" />
+                  <div className="absolute w-2 h-2 rounded-full bg-emerald-400 animate-ping opacity-75" />
+                </div>
+                <span className="max-w-[70px] sm:max-w-[110px] truncate text-white">
+                  {currentUser.displayName || accountName || 'Tài Khoản'}
+                </span>
+                <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-950 text-emerald-300 font-bold border border-emerald-500/30 hidden sm:inline">
+                  Cloud ✓
+                </span>
+              </button>
+            ) : (
+              <button
+                id="nav-auth-btn"
+                onClick={onOpenAuth}
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs cursor-pointer transition-all active:scale-95 shadow-md shadow-amber-950/40 animate-pulse"
+                title="Đăng nhập tài khoản Cloud (Google hoặc Đăng Nhập Nhanh)"
+              >
+                <LogIn className="w-3.5 h-3.5 fill-slate-950" />
+                <span>Đăng Nhập</span>
+              </button>
+            )
+          )}
+
           {/* Account Name / Profile Edit Button */}
           {onOpenSetAccountName && (
             <button

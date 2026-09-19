@@ -8,6 +8,7 @@ import { Shield, Sparkles, Volume2, Eye, Zap, Mic, Flame, Award, Footprints, Rot
 import { StageType, UnitData, StolenEgg, PetCompanion, GameState, SkillTreeState, CreatureRarity, PetAppearance, EggTierType } from './types';
 import { UNITS_DATA } from './data/unitsData';
 import { getEnchantmentConfig, CREATURES_CATALOG } from './data/creaturesData';
+import { getEvolvedPetForm } from './utils/petEvolution';
 import { PET_SKILL_NODES, getPassiveBonuses, calculateTotalSpentCrystals } from './data/skillTreeData';
 import { Navbar } from './components/Navbar';
 import { AlertGauge } from './components/AlertGauge';
@@ -28,7 +29,9 @@ import { PetAppearanceStudioModal } from './components/PetAppearanceStudioModal'
 import { PokemonPvPArenaModal } from './components/PokemonPvPArenaModal';
 import { SetAccountNameModal } from './components/SetAccountNameModal';
 import { AiThinkingAssistantModal } from './components/AiThinkingAssistantModal';
+import { AuthModal } from './components/AuthModal';
 import { auth, onAuthStateChanged, signOut, updateProfile, User, db, collection, getDocs, doc, setDoc, deleteDoc, serverTimestamp } from './lib/firebase';
+import { AppUser, getStoredUser } from './utils/authHelper';
 import { playAlarmSiren, playDragonGrowl, playBootsBonus, playSuccessChime } from './utils/soundEffects';
 import confetti from 'canvas-confetti';
 
@@ -128,31 +131,18 @@ export default function App() {
     }
   });
 
-  // 24-hour Daily Gift Cooldown Tracking (Prevents infinite giveaway exploit)
-  const DAILY_GIFT_COOLDOWN_MS = 24 * 60 * 60 * 1000;
-  const [lastDailyGiftTime, setLastDailyGiftTime] = useState<number>(() => {
+  // One-Time Free Starter Gift Tracking (Strictly 1 time per account / player)
+  const [hasClaimedFreeGift, setHasClaimedFreeGift] = useState<boolean>(() => {
     try {
-      const saved = localStorage.getItem('egg_thief_last_daily_gift_timestamp');
-      return saved ? parseInt(saved, 10) : 0;
+      const saved = localStorage.getItem('egg_thief_has_claimed_free_gift');
+      if (saved === 'true') return true;
+      const legacyTime = localStorage.getItem('egg_thief_last_daily_gift_timestamp');
+      if (legacyTime && parseInt(legacyTime, 10) > 0) return true;
+      return false;
     } catch {
-      return 0;
+      return false;
     }
   });
-
-  const [dailyGiftCooldownMs, setDailyGiftCooldownMs] = useState<number>(() => {
-    const elapsed = Date.now() - (lastDailyGiftTime || 0);
-    return Math.max(0, DAILY_GIFT_COOLDOWN_MS - elapsed);
-  });
-
-  useEffect(() => {
-    const updateCooldown = () => {
-      const elapsed = Date.now() - (lastDailyGiftTime || 0);
-      setDailyGiftCooldownMs(Math.max(0, DAILY_GIFT_COOLDOWN_MS - elapsed));
-    };
-    updateCooldown();
-    const interval = setInterval(updateCooldown, 1000);
-    return () => clearInterval(interval);
-  }, [lastDailyGiftTime]);
 
   // Calculate active passive modifiers
   const passiveBonuses = useMemo(() => getPassiveBonuses(skillTreeState), [skillTreeState]);
@@ -235,9 +225,12 @@ export default function App() {
   };
 
   // User Authentication & Account Name State
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentUser, setCurrentUser] = useState<AppUser | User | null>(() => getStoredUser() || null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [accountName, setAccountName] = useState<string>(() => {
     try {
+      const stored = getStoredUser();
+      if (stored?.displayName) return stored.displayName;
       return localStorage.getItem('egg_thief_player_name') || 'Nhà Thám Hiểm';
     } catch {
       return 'Nhà Thám Hiểm';
@@ -247,12 +240,26 @@ export default function App() {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setCurrentUser(user);
       if (user) {
+        const mapped: AppUser = {
+          uid: user.uid,
+          displayName: user.displayName || 'Nhà Thám Hiểm',
+          email: user.email,
+          photoURL: user.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(user.uid)}`,
+          authProvider: 'google',
+        };
+        setCurrentUser(mapped);
         const saved = localStorage.getItem('egg_thief_player_name');
         if ((!saved || saved === 'Nhà Thám Hiểm') && user.displayName) {
           setAccountName(user.displayName);
           localStorage.setItem('egg_thief_player_name', user.displayName);
+        }
+      } else {
+        const stored = getStoredUser();
+        if (stored && stored.authProvider === 'cloud_fast') {
+          setCurrentUser(stored);
+        } else {
+          setCurrentUser(null);
         }
       }
     });
@@ -265,10 +272,12 @@ export default function App() {
     localStorage.setItem('egg_thief_player_name', newName);
 
     if (currentUser) {
-      try {
-        await updateProfile(currentUser, { displayName: newName });
-      } catch (e) {
-        console.warn('Failed to update Firebase Auth profile displayName:', e);
+      if (auth.currentUser) {
+        try {
+          await updateProfile(auth.currentUser, { displayName: newName });
+        } catch (e) {
+          console.warn('Failed to update Firebase Auth profile displayName:', e);
+        }
       }
 
       try {
@@ -609,6 +618,34 @@ export default function App() {
     );
   };
 
+  const handleEvolvePet = (petId: string): PetCompanion | null => {
+    const targetPet = hatchedPets.find((p) => p.id === petId);
+    if (!targetPet) return null;
+    const currentLevel = targetPet.level || 1;
+    const currentEnchant = targetPet.enchantmentLevel || 0;
+    if (currentLevel < 20 || currentEnchant < 5) return null;
+
+    const evolvedPet = getEvolvedPetForm(targetPet);
+    setHatchedPets((prev) =>
+      prev.map((p) => (p.id === petId ? evolvedPet : p))
+    );
+    return evolvedPet;
+  };
+
+  const handleLevelUpPet = (petId: string, levelAmount: number = 1) => {
+    setHatchedPets((prev) =>
+      prev.map((p) => {
+        if (p.id !== petId) return p;
+        const currentLvl = p.level || 1;
+        return {
+          ...p,
+          level: currentLvl + levelAmount,
+          exp: 0,
+        };
+      })
+    );
+  };
+
   // Automatic migration: purge any previous admin session or publisher pets from localStorage
   useEffect(() => {
     const adminSession = localStorage.getItem('egg_thief_admin_session_active');
@@ -718,6 +755,7 @@ export default function App() {
       setIsChaseModeActive(false);
       setPendingGiftsCount(0);
       setAccountName('Nhà Thám Hiểm');
+      setHasClaimedFreeGift(false);
 
       playSuccessChime();
       alert('✅ ĐÃ RESET TOÀN BỘ TÀI KHOẢN VÀ DỮ LIỆU THÀNH CÔNG!\nGame đã được đưa về trạng thái khởi đầu sạch sẽ.');
@@ -729,34 +767,30 @@ export default function App() {
   };
 
   const handleClaimFreeGift = () => {
-    const now = Date.now();
-    const elapsed = now - (lastDailyGiftTime || 0);
-
-    if (elapsed < DAILY_GIFT_COOLDOWN_MS) {
-      const remainingMs = DAILY_GIFT_COOLDOWN_MS - elapsed;
-      const hours = Math.floor(remainingMs / (60 * 60 * 1000));
-      const minutes = Math.floor((remainingMs % (60 * 60 * 1000)) / (60 * 1000));
-      const seconds = Math.floor((remainingMs % (60 * 1000)) / 1000);
+    if (hasClaimedFreeGift) {
       alert(
-        `⏳ BẠN ĐÃ NHẬN QUÀ HÔM NAY RỒI!\n\n` +
-          `• Quà tặng chỉ được nhận 1 lần mỗi 24 giờ để đảm bảo cân bằng game.\n` +
-          `• Thời gian nhận lượt tiếp theo: ${hours} giờ ${minutes} phút (${seconds}s) nữa.\n\n` +
-          `Hãy tiếp tục vượt qua các Ải Tiếng Anh để đoạt thêm Trứng Rồng nhé!`
+        `⚠️ BẠN ĐÃ NHẬN GÓI QUÀ NÀY RỒI!\n\n` +
+          `• Gói quà tặng khởi đầu chỉ được nhận đúng 1 lần duy nhất cho mỗi tài khoản.\n` +
+          `• Bạn đã nhận phần quà này trước đó rồi.\n\n` +
+          `Hãy tiếp tục vượt qua các Ải Tiếng Anh để đoạt thêm Trứng Rồng và nâng cấp Thú Cưng nhé!`
       );
       return;
     }
 
-    // Save claim timestamp immediately to prevent double-claiming
-    localStorage.setItem('egg_thief_last_daily_gift_timestamp', now.toString());
-    setLastDailyGiftTime(now);
-    setDailyGiftCooldownMs(DAILY_GIFT_COOLDOWN_MS);
+    // Save one-time claim status immediately to prevent any duplication
+    try {
+      localStorage.setItem('egg_thief_has_claimed_free_gift', 'true');
+    } catch (e) {
+      console.error(e);
+    }
+    setHasClaimedFreeGift(true);
 
     // Balanced reward package
     const randomCreature = CREATURES_CATALOG[Math.floor(Math.random() * CREATURES_CATALOG.length)];
     const newPet: PetCompanion = {
       ...randomCreature,
-      id: `daily-gift-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-      hatchedAt: `🎁 Quà Điểm Danh Ngày (${new Date().toLocaleDateString('vi-VN')})`,
+      id: `free-gift-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      hatchedAt: `🎁 Quà Tặng Khởi Đầu (${new Date().toLocaleDateString('vi-VN')})`,
       level: 10,
       exp: 0,
       maxExp: 250,
@@ -768,12 +802,12 @@ export default function App() {
     const chosenTier = eggTiers[Math.floor(Math.random() * eggTiers.length)];
 
     const freeEgg: StolenEgg = {
-      id: `daily-egg-${Date.now()}`,
-      unitId: 'unit-daily-gift',
-      unitTitle: `🎁 Trứng Điểm Danh (${chosenTier.toUpperCase()})`,
+      id: `free-egg-${Date.now()}`,
+      unitId: 'unit-free-gift',
+      unitTitle: `🎁 Trứng Quà Tặng (${chosenTier.toUpperCase()})`,
       eggType: chosenTier,
       obtainedScore: 10,
-      stolenAt: 'Quà Điểm Danh Hàng Ngày',
+      stolenAt: 'Quà Tặng Khởi Đầu (Chỉ 1 Lần Duy Nhất)',
       isHatched: false,
     };
     setStolenEggs((prev) => [freeEgg, ...prev]);
@@ -784,11 +818,11 @@ export default function App() {
     playSuccessChime();
     confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
     alert(
-      `🎁 NHẬN QUÀ ĐIỂM DANH HÀNG NGÀY THÀNH CÔNG!\n\n` +
+      `🎁 NHẬN GÓI QUÀ THÀNH CÔNG (CHỈ 1 LẦN DUY NHẤT)!\n\n` +
         `• Nhận Pet Đồng Hành: ${newPet.name} (Lv.10, ★1)\n` +
         `• Nhận Trứng: ${freeEgg.unitTitle}\n` +
         `• Nhận +${crystalReward} Dragon Crystals 💎\n\n` +
-        `⏱️ Quà tiếp theo sẽ có sau 24 giờ nữa. Chúc bạn học tốt!`
+        `✨ Gói quà này đã hoàn tất (nhận 1 lần duy nhất). Chúc bạn phiêu lưu vui vẻ!`
     );
   };
 
@@ -852,6 +886,8 @@ export default function App() {
         accountName={accountName}
         onOpenSetAccountName={() => setIsSetAccountNameOpen(true)}
         onOpenAiAssistant={() => setIsAiAssistantOpen(true)}
+        currentUser={currentUser as AppUser | null}
+        onOpenAuth={() => setIsAuthModalOpen(true)}
       />
 
       {/* Main Content Area */}
@@ -1017,7 +1053,7 @@ export default function App() {
         onAddDragonCrystals={(amt) => setDragonCrystals((prev) => prev + amt)}
         onSellPet={handleSellPet}
         onClaimFreeGift={handleClaimFreeGift}
-        dailyGiftCooldownMs={dailyGiftCooldownMs}
+        hasClaimedFreeGift={hasClaimedFreeGift}
         onOpenAppearanceStudio={(petId) => {
           if (petId) {
             setSelectedAppearancePetId(petId);
@@ -1029,6 +1065,8 @@ export default function App() {
           setIsHatcheryOpen(false);
           setIsPokemonPvPOpen(true);
         }}
+        onEvolvePet={handleEvolvePet}
+        onLevelUpPet={handleLevelUpPet}
       />
 
       <PetArenaModal
@@ -1094,6 +1132,21 @@ export default function App() {
         onResetAllAccounts={handleResetAllAccounts}
         accountName={accountName}
         onOpenSetAccountName={() => setIsSetAccountNameOpen(true)}
+        currentUser={currentUser as AppUser | null}
+        onUserChange={(u) => setCurrentUser(u)}
+        onOpenAuth={() => setIsAuthModalOpen(true)}
+      />
+
+      {/* Cloud Authentication & Account Diagnostics Modal */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        currentUser={currentUser as AppUser | null}
+        onUserChange={(u) => setCurrentUser(u)}
+        accountName={accountName}
+        hatchedPets={hatchedPets}
+        dragonCrystals={dragonCrystals}
+        skillTreeState={skillTreeState}
       />
 
       {/* Set / Edit Account Name Modal */}
