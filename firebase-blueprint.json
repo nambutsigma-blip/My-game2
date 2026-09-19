@@ -1,0 +1,145 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile in Egg Thief",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "description": "User email address"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Player display name"
+        },
+        "role": {
+          "type": "string",
+          "description": "User role (admin or player)"
+        }
+      }
+    },
+    "OnlinePlayer": {
+      "title": "OnlinePlayer",
+      "description": "Online player record in multiplayer arena",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "User ID"
+        },
+        "playerName": {
+          "type": "string",
+          "description": "Player name"
+        },
+        "trophies": {
+          "type": "number",
+          "description": "Arena trophies"
+        }
+      }
+    },
+    "LeaderboardEntry": {
+      "title": "LeaderboardEntry",
+      "description": "Arena leaderboard entry",
+      "type": "object",
+      "properties": {
+        "playerName": {
+          "type": "string",
+          "description": "Player name"
+        },
+        "trophies": {
+          "type": "number",
+          "description": "Arena trophies count"
+        }
+      }
+    },
+    "TradeRequest": {
+      "title": "TradeRequest",
+      "description": "Online pet trade requests between players",
+      "type": "object",
+      "properties": {
+        "senderId": {
+          "type": "string",
+          "description": "User initiating trade"
+        },
+        "receiverId": {
+          "type": "string",
+          "description": "Target player"
+        }
+      }
+    },
+    "Gift": {
+      "title": "Gift",
+      "description": "Offline and online gifts or donations between players",
+      "type": "object",
+      "properties": {
+        "senderUid": {
+          "type": "string",
+          "description": "User ID of the sender"
+        },
+        "senderName": {
+          "type": "string",
+          "description": "Sender display name"
+        },
+        "senderEmail": {
+          "type": "string",
+          "description": "Sender email"
+        },
+        "senderPhoto": {
+          "type": "string",
+          "description": "Sender photo URL"
+        },
+        "targetUid": {
+          "type": "string",
+          "description": "Recipient User ID"
+        },
+        "targetEmail": {
+          "type": "string",
+          "description": "Recipient email address"
+        },
+        "targetName": {
+          "type": "string",
+          "description": "Recipient name"
+        },
+        "giftType": {
+          "type": "string",
+          "description": "Type of gift: crystals, pet, or egg"
+        },
+        "crystals": {
+          "type": "number",
+          "description": "Dragon crystals amount"
+        },
+        "message": {
+          "type": "string",
+          "description": "Gift message"
+        },
+        "status": {
+          "type": "string",
+          "description": "pending or claimed"
+        }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User account documents"
+    },
+    "/onlinePlayers/{userId}": {
+      "schema": "OnlinePlayer",
+      "description": "Active players in the multiplayer arena"
+    },
+    "/leaderboard/{userId}": {
+      "schema": "LeaderboardEntry",
+      "description": "Rankings of trainers"
+    },
+    "/tradeRequests/{tradeId}": {
+      "schema": "TradeRequest",
+      "description": "Pet trade requests"
+    },
+    "/gifts/{giftId}": {
+      "schema": "Gift",
+      "description": "Universal gifts and donations for online and offline players"
+    }
+  }
+}
