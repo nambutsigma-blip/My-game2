@@ -14,10 +14,17 @@ import {
   Award,
   Star,
   Users,
+  History,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import { PetCompanion, PokemonBattleMove } from '../types';
+import { PetCompanion, PokemonBattleMove, BattleHistoryRecord } from '../types';
 import { PokemonPetVisual, getDefaultAppearance } from './PokemonPetVisual';
+import { BattleHistoryModal } from './BattleHistoryModal';
+import {
+  addBattleRecord,
+  getBattleHistory,
+  getBattleStats,
+} from '../utils/battleHistoryManager';
 import {
   GYM_LEADERS,
   PokemonGymLeader,
@@ -93,6 +100,14 @@ export const PokemonPvPArenaModal: React.FC<PokemonPvPArenaModalProps> = ({
   // Animation states for visuals
   const [playerAnimState, setPlayerAnimState] = useState<'idle' | 'attack' | 'hit' | 'special' | 'victory' | 'faint'>('idle');
   const [opponentAnimState, setOpponentAnimState] = useState<'idle' | 'attack' | 'hit' | 'special' | 'victory' | 'faint'>('idle');
+  const [playerActionClass, setPlayerActionClass] = useState<string>('');
+  const [opponentActionClass, setOpponentActionClass] = useState<string>('');
+  const [floatingDamage, setFloatingDamage] = useState<{
+    target: 'player' | 'opponent';
+    text: string;
+    isCrit?: boolean;
+    isHeal?: boolean;
+  } | null>(null);
   const [combatFx, setCombatFx] = useState<{ type: string; text: string; x: number; y: number } | null>(null);
 
   // Battle Dialogue Text
@@ -110,12 +125,39 @@ export const PokemonPvPArenaModal: React.FC<PokemonPvPArenaModalProps> = ({
     }
   });
 
+  // Battle History State & Analytics
+  const [isBattleHistoryOpen, setIsBattleHistoryOpen] = useState<boolean>(false);
+  const [battleHistory, setBattleHistory] = useState<BattleHistoryRecord[]>(() => getBattleHistory());
+  const [battleTurns, setBattleTurns] = useState<number>(1);
+  const [lastDefeatLoss, setLastDefeatLoss] = useState<number>(0);
+
+  // Sync battle history when modal opens or records update
+  useEffect(() => {
+    const handleHistoryUpdate = () => {
+      setBattleHistory(getBattleHistory());
+    };
+    window.addEventListener('pokemon_battle_history_updated', handleHistoryUpdate);
+    return () => {
+      window.removeEventListener('pokemon_battle_history_updated', handleHistoryUpdate);
+    };
+  }, []);
+
+  const arenaStats = getBattleStats(battleHistory);
+
   // Calculate HP based on level and tier
   const calculateHp = (pet: PetCompanion) => {
     const level = pet.level || 1;
     const tier = pet.tierRank || 1;
     return Math.floor(120 + level * 8 + tier * 15);
   };
+
+  // Auto clear floating damage badges
+  useEffect(() => {
+    if (floatingDamage) {
+      const timer = setTimeout(() => setFloatingDamage(null), 950);
+      return () => clearTimeout(timer);
+    }
+  }, [floatingDamage]);
 
   // Start Battle with selected Gym Leader
   const handleStartGymBattle = (leader: PokemonGymLeader) => {
@@ -138,9 +180,14 @@ export const PokemonPvPArenaModal: React.FC<PokemonPvPArenaModalProps> = ({
 
     setPlayerAnimState('idle');
     setOpponentAnimState('idle');
+    setPlayerActionClass('');
+    setOpponentActionClass('');
+    setFloatingDamage(null);
     setBattleMenuTab('main');
     setIsPlayerTurn(true);
     setIsBusy(false);
+    setBattleTurns(1);
+    setLastDefeatLoss(0);
 
     setBattleLog(`Huấn luyện viên ${leader.name} đã cử ${leader.pet.name} ra sân! Bạn hãy chọn chiêu thức!`);
     setBattlePhase('battle');
@@ -161,6 +208,8 @@ export const PokemonPvPArenaModal: React.FC<PokemonPvPArenaModalProps> = ({
     setPlayerHp(newMaxHp);
     setPlayerMoves(generatePetPokemonMoves(newPet));
     setPlayerAnimState('idle');
+    setPlayerActionClass('');
+    setOpponentActionClass('');
 
     playSuccessChime();
 
@@ -174,17 +223,20 @@ export const PokemonPvPArenaModal: React.FC<PokemonPvPArenaModalProps> = ({
   const handleExecutePlayerMove = (move: PokemonBattleMove) => {
     if (!isPlayerTurn || isBusy) return;
     setIsBusy(true);
+    setBattleTurns((prev) => prev + 1);
     setBattleMenuTab('main');
 
     // 1. Move announce
     setBattleLog(`${activePlayerPet.name} sử dụng ${move.name}!`);
 
-    // 2. Play attack animation
+    // 2. Play attack animation - trigger attackLunge
     setPlayerAnimState(move.category === 'special' ? 'special' : 'attack');
+    setPlayerActionClass('attackLunge');
     playPokemonAttackSound(move.category === 'special' ? 'special' : 'physical');
 
     setTimeout(() => {
       setPlayerAnimState('idle');
+      setPlayerActionClass('');
 
       if (move.category === 'status') {
         if (move.statusEffect === 'heal') {
@@ -192,10 +244,12 @@ export const PokemonPvPArenaModal: React.FC<PokemonPvPArenaModalProps> = ({
           setPlayerHp((prev) => Math.min(playerMaxHp, prev + healAmount));
           playSuccessChime();
           setBattleLog(`${activePlayerPet.name} đã hồi phục ${healAmount} HP!`);
+          setFloatingDamage({ target: 'player', text: `+${healAmount}`, isHeal: true });
         } else {
           setPlayerAttackBuff((prev) => prev + 0.45);
           playSuccessChime();
           setBattleLog(`Sức tấn công của ${activePlayerPet.name} tăng mạnh vọt lên!`);
+          setFloatingDamage({ target: 'player', text: 'TĂNG CÔNG!', isHeal: true });
         }
       } else {
         // Attack calculation
@@ -204,8 +258,15 @@ export const PokemonPvPArenaModal: React.FC<PokemonPvPArenaModalProps> = ({
         const critMult = isCrit ? 1.5 : 1.0;
         const baseDmg = Math.floor((move.power * 0.9 + (activePlayerPet.level || 1) * 3) * playerAttackBuff * typeMult * critMult);
 
-        // Flash opponent hit
+        // Flash opponent hit - trigger hitFlash
         setOpponentAnimState('hit');
+        setOpponentActionClass('hitFlash');
+        setFloatingDamage({
+          target: 'opponent',
+          text: `${isCrit ? '💥 CRIT ' : '-'}${baseDmg}`,
+          isCrit,
+        });
+
         if (typeMult > 1.2) {
           playSuperEffectiveSound();
         } else {
@@ -222,6 +283,12 @@ export const PokemonPvPArenaModal: React.FC<PokemonPvPArenaModalProps> = ({
         if (isCrit) extraNote += ' Đòn đánh chí mạng!';
 
         setBattleLog(`Gây ${baseDmg} sát thương lên ${selectedGymLeader.pet.name}!${extraNote}`);
+
+        // Reset hitFlash after animation duration
+        setTimeout(() => {
+          setOpponentActionClass('');
+          setOpponentAnimState('idle');
+        }, 550);
 
         // Check if opponent fainted
         if (newOppHp <= 0) {
@@ -249,20 +316,25 @@ export const PokemonPvPArenaModal: React.FC<PokemonPvPArenaModalProps> = ({
     const chosenMove = moves[Math.floor(Math.random() * moves.length)];
 
     setBattleLog(`Đối thủ ${selectedGymLeader.pet.name} sử dụng ${chosenMove.name}!`);
+    // Trigger opponent attackLunge
     setOpponentAnimState(chosenMove.category === 'special' ? 'special' : 'attack');
+    setOpponentActionClass('attackLunge');
     playPokemonAttackSound(chosenMove.category === 'special' ? 'special' : 'physical');
 
     setTimeout(() => {
       setOpponentAnimState('idle');
+      setOpponentActionClass('');
 
       if (chosenMove.category === 'status') {
         if (chosenMove.statusEffect === 'heal') {
           const healAmount = Math.floor(opponentMaxHp * 0.3);
           setOpponentHp((prev) => Math.min(opponentMaxHp, prev + healAmount));
           setBattleLog(`Đối thủ ${selectedGymLeader.pet.name} đã hồi phục ${healAmount} HP!`);
+          setFloatingDamage({ target: 'opponent', text: `+${healAmount}`, isHeal: true });
         } else {
           setOpponentAttackBuff((prev) => prev + 0.35);
           setBattleLog(`Sức mạnh của đối thủ ${selectedGymLeader.pet.name} tăng lên!`);
+          setFloatingDamage({ target: 'opponent', text: 'TĂNG CÔNG!', isHeal: true });
         }
       } else {
         const typeMult = calculateTypeMultiplier(chosenMove.type, activePlayerPet.element);
@@ -272,7 +344,14 @@ export const PokemonPvPArenaModal: React.FC<PokemonPvPArenaModalProps> = ({
           (chosenMove.power * 0.75 + (selectedGymLeader.pet.level || 1) * 2.8) * opponentAttackBuff * typeMult * critMult
         );
 
+        // Trigger player hitFlash
         setPlayerAnimState('hit');
+        setPlayerActionClass('hitFlash');
+        setFloatingDamage({
+          target: 'player',
+          text: `${isCrit ? '💥 CRIT ' : '-'}${baseDmg}`,
+          isCrit,
+        });
         playPokemonAttackSound('physical');
 
         const newPlayerHp = Math.max(0, playerHp - baseDmg);
@@ -283,6 +362,12 @@ export const PokemonPvPArenaModal: React.FC<PokemonPvPArenaModalProps> = ({
         if (isCrit) extraNote += ' Đòn chí mạng!';
 
         setBattleLog(`${selectedGymLeader.pet.name} gây ${baseDmg} sát thương lên ${activePlayerPet.name}!${extraNote}`);
+
+        // Reset hitFlash after animation duration
+        setTimeout(() => {
+          setPlayerActionClass('');
+          setPlayerAnimState('idle');
+        }, 550);
 
         if (newPlayerHp <= 0) {
           setTimeout(() => {
@@ -358,6 +443,27 @@ export const PokemonPvPArenaModal: React.FC<PokemonPvPArenaModalProps> = ({
         }
       }
 
+      // Record victory in Battle History
+      addBattleRecord({
+        outcome: 'victory',
+        playerPetName: activePlayerPet.name,
+        playerPetAvatar: activePlayerPet.avatarIcon,
+        playerPetElement: activePlayerPet.element,
+        playerPetLevel: activePlayerPet.level || 1,
+        opponentName: selectedGymLeader.name,
+        opponentTitle: selectedGymLeader.title,
+        opponentPetName: selectedGymLeader.pet.name,
+        opponentPetAvatar: selectedGymLeader.pet.avatarIcon,
+        opponentPetElement: selectedGymLeader.pet.element,
+        opponentPetLevel: selectedGymLeader.pet.level || 1,
+        crystalDelta: selectedGymLeader.rewardCrystals,
+        rewardExp: selectedGymLeader.rewardExp,
+        badgeEarned: selectedGymLeader.badge,
+        badgeIcon: selectedGymLeader.badgeIcon,
+        turnsCount: Math.max(1, battleTurns),
+      });
+      setBattleHistory(getBattleHistory());
+
       playSuccessChime();
       confetti({
         particleCount: 80,
@@ -373,8 +479,39 @@ export const PokemonPvPArenaModal: React.FC<PokemonPvPArenaModalProps> = ({
     setPlayerAnimState('faint');
     setBattleLog(`${activePlayerPet.name} đã ngã gục... Bạn đã thua trận!`);
 
+    // Calculate crystal loss penalty (e.g. 25% of reward, minimum 10, capped by current crystals)
+    const crystalLoss = Math.min(crystalsCount, Math.max(10, Math.floor(selectedGymLeader.rewardCrystals * 0.25)));
+    setLastDefeatLoss(crystalLoss);
+
     setTimeout(() => {
       setBattlePhase('defeat');
+
+      if (crystalLoss > 0) {
+        if (onAddDragonCrystals) {
+          onAddDragonCrystals(-crystalLoss);
+        }
+        if (onAddCrystals) {
+          onAddCrystals(-crystalLoss);
+        }
+      }
+
+      // Record defeat in Battle History
+      addBattleRecord({
+        outcome: 'defeat',
+        playerPetName: activePlayerPet.name,
+        playerPetAvatar: activePlayerPet.avatarIcon,
+        playerPetElement: activePlayerPet.element,
+        playerPetLevel: activePlayerPet.level || 1,
+        opponentName: selectedGymLeader.name,
+        opponentTitle: selectedGymLeader.title,
+        opponentPetName: selectedGymLeader.pet.name,
+        opponentPetAvatar: selectedGymLeader.pet.avatarIcon,
+        opponentPetElement: selectedGymLeader.pet.element,
+        opponentPetLevel: selectedGymLeader.pet.level || 1,
+        crystalDelta: -crystalLoss,
+        turnsCount: Math.max(1, battleTurns),
+      });
+      setBattleHistory(getBattleHistory());
     }, 1500);
   };
 
@@ -434,16 +571,31 @@ export const PokemonPvPArenaModal: React.FC<PokemonPvPArenaModalProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <button
+              id="header-open-battle-history-btn"
+              onClick={() => setIsBattleHistoryOpen(true)}
+              className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-all active:scale-95 shadow-sm"
+              title="Xem Lịch Sử Chiến Đấu Võ Đài"
+            >
+              <History className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden xs:inline">Lịch Sử Đấu</span>
+              {battleHistory.length > 0 && (
+                <span className="bg-amber-500/30 text-amber-200 text-[10px] px-1.5 py-0.2 rounded-full font-extrabold">
+                  {battleHistory.length}
+                </span>
+              )}
+            </button>
+
             {onOpenAppearanceStudio && (
               <button
                 onClick={() => onOpenAppearanceStudio(activePlayerPet?.id)}
-                className="hidden sm:flex px-2.5 py-1 rounded-xl bg-purple-900/80 hover:bg-purple-800 border border-purple-500/50 text-purple-200 text-xs font-bold items-center gap-1 cursor-pointer transition-all active:scale-95"
+                className="hidden md:flex px-2.5 py-1.5 rounded-xl bg-purple-900/80 hover:bg-purple-800 border border-purple-500/50 text-purple-200 text-xs font-bold items-center gap-1 cursor-pointer transition-all active:scale-95"
               >
                 <span>🎨 Đổi Ngoại Hình</span>
               </button>
             )}
-            <div className="bg-slate-900 px-3 py-1 rounded-xl border border-slate-800 flex items-center gap-1.5 text-xs font-bold text-amber-300">
+            <div className="bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-800 flex items-center gap-1.5 text-xs font-bold text-amber-300">
               <span>💎</span>
               <span>{crystalsCount}</span>
             </div>
@@ -508,6 +660,39 @@ export const PokemonPvPArenaModal: React.FC<PokemonPvPArenaModalProps> = ({
                 </div>
               </div>
             )}
+
+            {/* Quick Battle History & Performance Banner */}
+            <div className="p-3 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-900/90 to-amber-950/20 border border-slate-800 flex flex-wrap items-center justify-between gap-3 shadow">
+              <div className="flex items-center gap-2.5 text-xs">
+                <div className="w-7 h-7 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold flex-shrink-0">
+                  📜
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-black text-white">Thành Tích Võ Đài:</span>
+                    <span className="font-bold text-emerald-400">{arenaStats.wins} Thắng</span>
+                    <span className="text-slate-500">•</span>
+                    <span className="font-bold text-rose-400">{arenaStats.losses} Thua</span>
+                    <span className="text-slate-400 text-[11px]">({arenaStats.winRate}% Thắng)</span>
+                  </div>
+                  <div className="text-[11px] text-slate-400 flex items-center gap-1.5 mt-0.5">
+                    <span>Biến động Tinh Thể ròng:</span>
+                    <span className={`font-black ${arenaStats.netCrystals >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {arenaStats.netCrystals > 0 ? `+${arenaStats.netCrystals}` : arenaStats.netCrystals} 💎
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                id="arena-open-battle-history-banner-btn"
+                onClick={() => setIsBattleHistoryOpen(true)}
+                className="px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer hover:border-amber-500/50 active:scale-95"
+              >
+                <History className="w-3.5 h-3.5" />
+                <span>Xem Nhật Ký Đấu ({battleHistory.length})</span>
+              </button>
+            </div>
 
             {/* Gym Leader Cards Grid */}
             <div className="space-y-2">
@@ -638,13 +823,42 @@ export const PokemonPvPArenaModal: React.FC<PokemonPvPArenaModalProps> = ({
                 </div>
 
                 {/* Opponent Sprite Stage Platform */}
-                <div className="relative flex flex-col items-center justify-center">
+                <div
+                  id="pvp-opponent-stage"
+                  data-combatant="opponent"
+                  className={`relative flex flex-col items-center justify-center opponent-stage ${opponentActionClass}`}
+                >
+                  {/* Impact Slash / Burst when hitFlash */}
+                  {opponentActionClass === 'hitFlash' && (
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-30">
+                      <div className="w-24 h-24 rounded-full border-4 border-rose-500 animate-ping opacity-80" />
+                      <span className="text-3xl animate-bounce">💥</span>
+                    </div>
+                  )}
+
+                  {/* Floating Combat Text */}
+                  {floatingDamage && floatingDamage.target === 'opponent' && (
+                    <div className="absolute -top-12 left-1/2 -translate-x-1/2 z-40 animate-float-damage whitespace-nowrap pointer-events-none">
+                      <div className={`px-3 py-1 rounded-xl font-black text-xs shadow-2xl flex items-center gap-1 border ${
+                        floatingDamage.isHeal
+                          ? 'bg-emerald-950/95 text-emerald-300 border-emerald-500/60'
+                          : floatingDamage.isCrit
+                          ? 'bg-rose-950/95 text-rose-200 border-rose-500 text-sm scale-110 shadow-rose-900/50'
+                          : 'bg-amber-950/95 text-amber-300 border-amber-500/50'
+                      }`}>
+                        <span>{floatingDamage.isHeal ? '💚 +' : '⚡'}</span>
+                        <span>{floatingDamage.text}</span>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="absolute -bottom-2 w-32 h-10 rounded-[100%] bg-emerald-900/40 border border-emerald-500/30 blur-[1px]" />
                   <PokemonPetVisual
                     pet={selectedGymLeader.pet}
                     size="battle-front"
                     facing="front"
                     combatState={opponentAnimState}
+                    className={opponentActionClass}
                     showAura={true}
                     showShadow={false}
                   />
@@ -654,13 +868,42 @@ export const PokemonPvPArenaModal: React.FC<PokemonPvPArenaModalProps> = ({
               {/* 2. BOTTOM-LEFT: PLAYER PET (BACK-VIEW) & HUD CARD */}
               <div className="flex justify-between items-end w-full relative z-10">
                 {/* Player Sprite Stage Platform (Back-View Pokemon) */}
-                <div className="relative flex flex-col items-center justify-center ml-2 sm:ml-6">
+                <div
+                  id="pvp-player-stage"
+                  data-combatant="player"
+                  className={`relative flex flex-col items-center justify-center ml-2 sm:ml-6 player-stage ${playerActionClass}`}
+                >
+                  {/* Impact Slash / Burst when hitFlash */}
+                  {playerActionClass === 'hitFlash' && (
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-30">
+                      <div className="w-24 h-24 rounded-full border-4 border-rose-500 animate-ping opacity-80" />
+                      <span className="text-3xl animate-bounce">💥</span>
+                    </div>
+                  )}
+
+                  {/* Floating Combat Text */}
+                  {floatingDamage && floatingDamage.target === 'player' && (
+                    <div className="absolute -top-12 left-1/2 -translate-x-1/2 z-40 animate-float-damage whitespace-nowrap pointer-events-none">
+                      <div className={`px-3 py-1 rounded-xl font-black text-xs shadow-2xl flex items-center gap-1 border ${
+                        floatingDamage.isHeal
+                          ? 'bg-emerald-950/95 text-emerald-300 border-emerald-500/60'
+                          : floatingDamage.isCrit
+                          ? 'bg-rose-950/95 text-rose-200 border-rose-500 text-sm scale-110 shadow-rose-900/50'
+                          : 'bg-rose-950/95 text-rose-300 border-rose-500/50'
+                      }`}>
+                        <span>{floatingDamage.isHeal ? '💚 +' : '⚡'}</span>
+                        <span>{floatingDamage.text}</span>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="absolute -bottom-2 w-36 h-12 rounded-[100%] bg-blue-900/40 border border-cyan-500/30 blur-[1px]" />
                   <PokemonPetVisual
                     pet={activePlayerPet}
                     size="battle-back"
                     facing="back"
                     combatState={playerAnimState}
+                    className={playerActionClass}
                     showAura={true}
                     showShadow={false}
                   />
@@ -920,7 +1163,16 @@ export const PokemonPvPArenaModal: React.FC<PokemonPvPArenaModalProps> = ({
               </div>
             </div>
 
-            <div className="flex items-center gap-3 pt-2">
+            <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+              <button
+                id="victory-open-battle-history-btn"
+                onClick={() => setIsBattleHistoryOpen(true)}
+                className="px-4 py-2.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 font-bold text-xs shadow flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all"
+              >
+                <History className="w-3.5 h-3.5 text-amber-400" />
+                <span>Xem Nhật Ký Trận Đấu</span>
+              </button>
+
               <button
                 onClick={() => setBattlePhase('select_gym')}
                 className="px-6 py-2.5 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-black text-xs shadow-lg shadow-amber-950/60 cursor-pointer active:scale-95"
@@ -945,7 +1197,24 @@ export const PokemonPvPArenaModal: React.FC<PokemonPvPArenaModalProps> = ({
               </p>
             </div>
 
-            <div className="flex items-center gap-3 pt-3">
+            {/* Defeat Loss Penalty card */}
+            <div className="bg-slate-900 border border-rose-500/30 rounded-2xl p-3.5 w-full max-w-sm flex items-center justify-between text-xs shadow">
+              <span className="text-slate-400 font-medium">Tổn thất Tinh Thể sau thất bại:</span>
+              <span className="font-black text-rose-400 flex items-center gap-1">
+                {lastDefeatLoss > 0 ? `-${lastDefeatLoss} 💎 Tinh Thể Rồng` : '0 💎'}
+              </span>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-center gap-3 pt-3">
+              <button
+                id="defeat-open-battle-history-btn"
+                onClick={() => setIsBattleHistoryOpen(true)}
+                className="px-4 py-2.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 font-bold text-xs shadow flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all"
+              >
+                <History className="w-3.5 h-3.5 text-amber-400" />
+                <span>Xem Nhật Ký Đấu</span>
+              </button>
+
               <button
                 onClick={() => handleStartGymBattle(selectedGymLeader)}
                 className="px-5 py-2.5 rounded-2xl bg-red-600 hover:bg-red-500 text-white font-black text-xs shadow cursor-pointer active:scale-95"
@@ -963,6 +1232,17 @@ export const PokemonPvPArenaModal: React.FC<PokemonPvPArenaModalProps> = ({
           </div>
         )}
       </div>
+
+      {/* Battle History Logs Modal */}
+      <BattleHistoryModal
+        isOpen={isBattleHistoryOpen}
+        onClose={() => setIsBattleHistoryOpen(false)}
+        onStartBattle={() => {
+          setIsBattleHistoryOpen(false);
+          setBattlePhase('select_gym');
+        }}
+        currentCrystals={crystalsCount}
+      />
     </div>
   );
 };

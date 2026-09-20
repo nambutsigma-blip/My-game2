@@ -9,6 +9,8 @@ interface Stage3VoiceCodeProps {
   onCorrectSpeaking: () => void;
   onWrongSpeaking: () => void;
   onEggStolenSuccess: (score: number) => void;
+  examTitle?: string;
+  examCode?: string;
 }
 
 // Client-side fallback analyzer if backend is unreachable or latency occurs
@@ -91,6 +93,8 @@ export const Stage3VoiceCode: React.FC<Stage3VoiceCodeProps> = ({
   onCorrectSpeaking,
   onWrongSpeaking,
   onEggStolenSuccess,
+  examTitle,
+  examCode,
 }) => {
   const [activeSubMode, setActiveSubMode] = useState<'cage_cipher' | 'dragon_challenge'>('cage_cipher');
 
@@ -343,17 +347,22 @@ export const Stage3VoiceCode: React.FC<Stage3VoiceCodeProps> = ({
               <Mic className="w-8 h-8 animate-pulse" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-xs font-bold uppercase tracking-widest text-rose-400 bg-rose-950/60 px-2.5 py-0.5 rounded-full border border-rose-800/60">
-                  Stage 3: Crucial Challenge
+                  Phần III: Mật Mã Khẩu Ngữ & Vấn Đáp Tình Huống AI (3.0 điểm)
                 </span>
-                <span className="text-xs text-slate-400">{unitTitle}</span>
+                {examCode && (
+                  <span className="text-[11px] font-mono text-amber-300 bg-amber-950/50 px-2 py-0.5 rounded border border-amber-800/40">
+                    Mã Đề: {examCode}
+                  </span>
+                )}
+                <span className="text-xs text-slate-400">{examTitle || unitTitle}</span>
               </div>
               <h2 className="text-xl md:text-2xl font-black text-white mt-1 flex items-center gap-2">
-                <span>Voice Cipher & AI Audio Sensor</span>
+                <span>Voice Cipher & Dragon Gatekeeper • Vấn Đáp Đề Thi Vào 10</span>
               </h2>
               <p className="text-xs md:text-sm text-slate-300 mt-0.5">
-                Vô hạn thời gian đọc! Phát âm chuẩn xác câu mật mã tiếng Anh để phá lồng kính và trộm Trứng Rồng.
+                Vô hạn thời gian suy nghĩ! Phát âm chuẩn xác câu mật mã hoặc đối thoại 1-1 với Rồng Gác Cổng để phá lồng kính trộm Trứng Rồng.
               </p>
             </div>
           </div>

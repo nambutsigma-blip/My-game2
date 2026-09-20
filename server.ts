@@ -502,6 +502,159 @@ YÊU CẦU:
     }
   });
 
+  // API 5: Generate Non-Repeating Grade 10 Entrance Exam Paper (1 Unit = 1 Đề Thi Vào 10 Theo Chủ Đề)
+  app.post('/api/generate-exam-questions', async (req, res) => {
+    try {
+      const {
+        unitId,
+        unitTitle,
+        unitSubtitle,
+        topic,
+        difficulty = 'standard',
+        excludeSignatures = [],
+      } = req.body;
+
+      if (!process.env.GEMINI_API_KEY) {
+        return res.status(503).json({
+          error: 'GEMINI_API_KEY chưa được cấu hình. Sử dụng ngân hàng đề thi cục bộ.',
+        });
+      }
+
+      const ai = getGeminiClient();
+
+      const excludePrompt = Array.isArray(excludeSignatures) && excludeSignatures.length > 0
+        ? `\n\nDANH SÁCH CÁC CÂU ĐÃ XUẤT HIỆN TRƯỚC ĐÂY (TUYỆT ĐỐI KHÔNG ĐƯỢC LẶP LẠI BẤT KỲ CÂU NÀO TRONG ĐÂY):\n${excludeSignatures.slice(-50).map((s: string, idx: number) => `${idx + 1}. ${s}`).join('\n')}`
+        : '';
+
+      const difficultyDesc = difficulty === 'advanced_chuyen'
+        ? 'Mức độ nâng cao chuyên sâu (dành cho thi chuyên Anh vào 10, học sinh giỏi, câu phân hóa điểm 9.5 - 10.0, bao gồm bẫy ngữ pháp tinh vi, đảo ngữ, câu điều kiện hỗn hợp, câu bị động kép, phrasal verbs nâng cao, thành ngữ collocations điểm 10).'
+        : 'Mức độ chuẩn đề thi tuyển sinh vào lớp 10 THPT công lập của các Sở GD&ĐT (Hà Nội, TP.HCM, Đà Nẵng,...), phân hóa từ 7.5 đến 9.0 điểm.';
+
+      const prompt = `Bạn là Chuyên gia Khảo thí và Giảng viên Luyện thi Tuyển sinh vào Lớp 10 THPT môn Tiếng Anh hàng đầu Việt Nam.
+Nhiệm vụ: Biên soạn một "ĐỀ THI VÀO 10 THEO CHUYÊN ĐỀ" hoàn chỉnh, hoàn toàn mới, độ khó cao, chuẩn format tuyển sinh 10 cho trò chơi giáo dục "Egg Thief - Bậc Thầy Trộm Trứng".
+
+THÔNG TIN BÀI HỌC & CHUYÊN ĐỀ:
+- Mã Unit: ${unitId || 'unit-1'}
+- Tên Unit: ${unitTitle || 'Thì & Ngữ Pháp Trọng Điểm'}
+- Phụ đề / Kiến thức: ${unitSubtitle || topic || 'Chuyên đề thi vào 10'}
+- Yêu cầu độ khó: ${difficultyDesc}
+${excludePrompt}
+
+YÊU CẦU BẮT BUỘC:
+1. ĐỀ THI MỚI 100%, KHÔNG TRÙNG LẶP: Mỗi câu hỏi phải là một bài toán ngôn ngữ mới mẻ, câu văn tự nhiên, ngữ cảnh học thuật và đời sống phong phú. Tuyệt đối không lặp lại bất kỳ câu nào trong danh sách loại trừ.
+2. NÂNG CAO ĐỘ KHÓ:
+   - Không ra các câu quá dễ hay hiển nhiên.
+   - Stage 1 (Phần I): 4 mục kiểm tra bao gồm Ngữ âm (phát âm nguyên âm, phụ âm, đuôi -ed/-s/es, âm câm), Trọng âm từ 2-3 âm tiết và Từ vựng Collocations then chốt của chuyên đề vào 10.
+   - Stage 2 (Phần II): 4 câu bẫy ngữ pháp đỉnh cao:
+     * Tối thiểu 1 câu Tìm Lỗi Sai (Error Identification có 4 phần gạch chân (A), (B), (C), (D) với bẫy cực kỳ tinh tế).
+     * Tối thiểu 1 câu Viết Lại Câu Tương Đương (Sentence Transformation).
+     * 2 câu Chọn Đáp Án Đúng (Multiple Choice) về ngữ pháp chuyên sâu (phối thì, câu bị động đặc biệt, câu điều kiện, mệnh đề quan hệ giản lược, liên từ...).
+   - Mỗi câu Stage 2 PHẢI có phần 'grammarRuleExplaining' giải thích cặn kẽ vì sao đúng, vì sao các phương án khác sai, và kèm theo 'examTip' (Mẹo làm bài thi vào 10: dấu hiệu nhận biết nhanh, tránh bẫy giám khảo).
+3. Stage 3 (Phần III - Speaking Cipher):
+   - Mẫu câu mật mã phát âm cao cấp thuộc chủ đề bài học.
+   - Câu hỏi vấn đáp tình huống 1-1 với Rồng Gác Cổng để học sinh phản xạ áp dụng cấu trúc ngữ pháp.
+
+Hãy trả về kết quả bằng JSON theo schema quy định.`;
+
+      const response = await callGeminiWithFallback(ai, {
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              examTitle: { type: Type.STRING, description: 'Tiêu đề đề thi, ví dụ: "Đề Thi Tuyển Sinh Vào 10 - Chuyên Đề: ..."' },
+              examCode: { type: Type.STRING, description: 'Mã đề thi, ví dụ: "10-THPT-HN-104"' },
+              topicName: { type: Type.STRING, description: 'Tên chuyên đề kiến thức' },
+              stage1Questions: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    id: { type: Type.STRING },
+                    word: { type: Type.STRING, description: 'Từ vựng trọng tâm hoặc cụm từ' },
+                    phonetic: { type: Type.STRING, description: 'Phiên âm IPA chuẩn' },
+                    meaningVi: { type: Type.STRING, description: 'Nghĩa tiếng Việt súc tích' },
+                    exampleEn: { type: Type.STRING, description: 'Câu ví dụ chuẩn đề thi' },
+                    exampleVi: { type: Type.STRING, description: 'Dịch nghĩa câu ví dụ' },
+                    keySound: { type: Type.STRING, description: 'Trọng âm hoặc âm tiết cần chú ý' },
+                    distractors: {
+                      type: Type.ARRAY,
+                      items: { type: Type.STRING },
+                      description: '3 phương án gây nhiễu cho câu đố laser'
+                    },
+                  },
+                  required: ['id', 'word', 'phonetic', 'meaningVi', 'exampleEn', 'exampleVi', 'keySound', 'distractors']
+                }
+              },
+              stage2Questions: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    id: { type: Type.STRING },
+                    instruction: { type: Type.STRING, description: 'Yêu cầu đề bài, ví dụ: "Mark the letter A, B, C, or D..."' },
+                    sentencePrompt: { type: Type.STRING, description: 'Nội dung câu hỏi hoặc câu có chỗ trống/gạch chân' },
+                    options: {
+                      type: Type.ARRAY,
+                      items: { type: Type.STRING },
+                      description: '4 phương án A, B, C, D'
+                    },
+                    correctAnswer: { type: Type.STRING, description: 'Phương án đúng (nội dung chính xác)' },
+                    grammarRuleExplaining: { type: Type.STRING, description: 'Giải thích chi tiết công thức và lý do đúng/sai' },
+                    examTip: { type: Type.STRING, description: 'Mẹo làm bài thi vào 10' }
+                  },
+                  required: ['id', 'instruction', 'sentencePrompt', 'options', 'correctAnswer', 'grammarRuleExplaining']
+                }
+              },
+              speakingCipher: {
+                type: Type.OBJECT,
+                properties: {
+                  id: { type: Type.STRING },
+                  title: { type: Type.STRING },
+                  targetPhrase: { type: Type.STRING },
+                  phonetic: { type: Type.STRING },
+                  meaningVi: { type: Type.STRING },
+                  targetSounds: {
+                    type: Type.ARRAY,
+                    items: { type: Type.STRING }
+                  },
+                  expectedGrammarRule: { type: Type.STRING },
+                  dragonGatekeeperPrompt: {
+                    type: Type.OBJECT,
+                    properties: {
+                      question: { type: Type.STRING },
+                      suggestedPattern: { type: Type.STRING },
+                      sampleAnswers: {
+                        type: Type.ARRAY,
+                        items: { type: Type.STRING }
+                      }
+                    },
+                    required: ['question', 'suggestedPattern', 'sampleAnswers']
+                  }
+                },
+                required: ['id', 'title', 'targetPhrase', 'phonetic', 'meaningVi', 'targetSounds', 'expectedGrammarRule', 'dragonGatekeeperPrompt']
+              }
+            },
+            required: ['examTitle', 'examCode', 'topicName', 'stage1Questions', 'stage2Questions', 'speakingCipher']
+          }
+        }
+      }, 35000);
+
+      const parsed = JSON.parse(response.text?.trim() || '{}');
+      if (parsed && Array.isArray(parsed.stage2Questions) && parsed.stage2Questions.length > 0) {
+        return res.json(parsed);
+      }
+
+      return res.status(500).json({ error: 'AI output format invalid' });
+    } catch (err: any) {
+      console.error('[Generate Exam Questions Error]', err);
+      return res.status(500).json({
+        error: 'Lỗi sinh đề thi từ AI: ' + (err?.message || 'Không thể xử lý lúc này.'),
+      });
+    }
+  });
+
   // Vite middleware in dev or static files in production
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({

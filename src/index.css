@@ -325,17 +325,61 @@
 
 @keyframes attackLunge {
   0% {
-    transform: translateX(0) scale(1);
+    transform: translate(0, 0) scale(1);
   }
-  30% {
-    transform: translateX(-15px) scale(0.95) rotate(-3deg);
+  20% {
+    transform: translate(-16px, 10px) scale(0.94) rotate(-4deg);
   }
-  60% {
-    transform: translateX(45px) scale(1.15) rotate(6deg);
-    filter: brightness(1.4) drop-shadow(0 0 25px currentColor);
+  50% {
+    transform: translate(60px, -32px) scale(1.18) rotate(6deg);
+    filter: brightness(1.5) drop-shadow(0 0 25px rgba(56, 189, 248, 0.9));
+  }
+  75% {
+    transform: translate(30px, -15px) scale(1.08) rotate(2deg);
   }
   100% {
-    transform: translateX(0) scale(1);
+    transform: translate(0, 0) scale(1) rotate(0deg);
+    filter: brightness(1);
+  }
+}
+
+@keyframes attackLungePlayer {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  20% {
+    transform: translate(-18px, 12px) scale(0.94) rotate(-4deg);
+  }
+  50% {
+    transform: translate(65px, -36px) scale(1.2) rotate(6deg);
+    filter: brightness(1.6) drop-shadow(0 0 30px rgba(56, 189, 248, 0.95)) drop-shadow(0 0 15px currentColor);
+  }
+  75% {
+    transform: translate(35px, -18px) scale(1.08) rotate(2deg);
+  }
+  100% {
+    transform: translate(0, 0) scale(1) rotate(0deg);
+    filter: brightness(1);
+  }
+}
+
+@keyframes attackLungeOpponent {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  20% {
+    transform: translate(18px, -12px) scale(0.94) rotate(4deg);
+  }
+  50% {
+    transform: translate(-65px, 36px) scale(1.2) rotate(-6deg);
+    filter: brightness(1.6) drop-shadow(0 0 30px rgba(239, 68, 68, 0.95)) drop-shadow(0 0 15px currentColor);
+  }
+  75% {
+    transform: translate(-35px, 18px) scale(1.08) rotate(-2deg);
+  }
+  100% {
+    transform: translate(0, 0) scale(1) rotate(0deg);
+    filter: brightness(1);
   }
 }
 
@@ -350,17 +394,54 @@
 }
 
 @keyframes hitFlash {
-  0%, 100% {
-    transform: translateX(0);
+  0% {
+    transform: translate(0, 0) scale(1);
     filter: brightness(1);
+    opacity: 1;
   }
-  25% {
-    transform: translateX(-8px) rotate(-5deg);
-    filter: brightness(2.5) sepia(1) hue-rotate(-50deg) saturate(5);
+  15% {
+    transform: translate(-14px, 4px) scale(0.92) rotate(-6deg);
+    filter: brightness(3.5) sepia(1) hue-rotate(-50deg) saturate(7) drop-shadow(0 0 25px #ef4444);
+    opacity: 0.95;
+  }
+  30% {
+    transform: translate(14px, -6px) scale(1.08) rotate(6deg);
+    filter: brightness(4) contrast(1.7) drop-shadow(0 0 35px #ffffff) drop-shadow(0 0 20px #f59e0b);
+    opacity: 0.75;
+  }
+  50% {
+    transform: translate(-10px, 4px) scale(0.95) rotate(-3deg);
+    filter: brightness(2.8) sepia(0.8) hue-rotate(-45deg) saturate(5) drop-shadow(0 0 20px #f43f5e);
+    opacity: 1;
   }
   75% {
-    transform: translateX(8px) rotate(5deg);
-    filter: brightness(2) sepia(1) hue-rotate(-50deg) saturate(4);
+    transform: translate(6px, -2px) scale(1.03) rotate(2deg);
+    filter: brightness(1.8) drop-shadow(0 0 10px #ef4444);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translate(0, 0) scale(1) rotate(0deg);
+    filter: brightness(1);
+    opacity: 1;
+  }
+}
+
+@keyframes floatDamageText {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 10px) scale(0.5);
+  }
+  20% {
+    opacity: 1;
+    transform: translate(-50%, -15px) scale(1.25);
+  }
+  70% {
+    opacity: 1;
+    transform: translate(-50%, -35px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -55px) scale(0.8);
   }
 }
 
@@ -377,6 +458,33 @@
     transform: scale(2.8) rotate(360deg);
     opacity: 0;
   }
+}
+
+/* PvP Battle Combat Classes */
+.attackLunge {
+  animation: attackLungePlayer 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  will-change: transform, filter;
+  z-index: 30;
+}
+
+[data-combatant="opponent"].attackLunge,
+[data-combatant="opponent"] .attackLunge,
+.opponent-stage.attackLunge,
+.opponent-stage .attackLunge,
+.attackLungeOpponent {
+  animation: attackLungeOpponent 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  will-change: transform, filter;
+  z-index: 30;
+}
+
+.hitFlash {
+  animation: hitFlash 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+  will-change: transform, filter, opacity;
+}
+
+.animate-float-damage {
+  animation: floatDamageText 0.9s cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards;
+  pointer-events: none;
 }
 
 /* Helper Animation Classes */
@@ -403,15 +511,24 @@
 }
 
 .animate-attack-lunge {
-  animation: attackLunge 0.5s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+  animation: attackLungePlayer 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.animate-lunge-back {
+  animation: attackLungePlayer 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.animate-lunge-front {
+  animation: attackLungeOpponent 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 .animate-spell-cast {
   animation: spellCastHover 0.8s ease-in-out infinite;
 }
 
-.animate-hit-flash {
-  animation: hitFlash 0.4s ease-in-out forwards;
+.animate-hit-flash,
+.animate-hit-shake {
+  animation: hitFlash 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
 }
 
 .animate-skill-burst {

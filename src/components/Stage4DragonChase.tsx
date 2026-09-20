@@ -2,16 +2,23 @@ import React, { useState } from 'react';
 import { Flame, ShieldAlert, Award, ArrowRight, CheckCircle, RotateCcw, Sparkles } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { REVIEW_QUESTIONS_UNITS_1_3 } from '../data/unitsData';
+import { ReviewQuestion } from '../types';
 import { playStealthStep, playLaser, playAlertUp, playSuccessChime, playDragonGrowl } from '../utils/soundEffects';
 
 interface Stage4DragonChaseProps {
   onEscapeSuccess: (score: number, total: number) => void;
   onReturnToNest: () => void;
+  customQuestions?: ReviewQuestion[];
+  examTitle?: string;
+  examCode?: string;
 }
 
 export const Stage4DragonChase: React.FC<Stage4DragonChaseProps> = ({
   onEscapeSuccess,
   onReturnToNest,
+  customQuestions,
+  examTitle,
+  examCode,
 }) => {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [selectedOpt, setSelectedOpt] = useState<number | null>(null);
@@ -22,8 +29,8 @@ export const Stage4DragonChase: React.FC<Stage4DragonChaseProps> = ({
   const [distanceMeters, setDistanceMeters] = useState(30);
   const [isFinished, setIsFinished] = useState(false);
 
-  const questions = REVIEW_QUESTIONS_UNITS_1_3;
-  const currentQ = questions[currentIdx];
+  const questions = (customQuestions && customQuestions.length > 0) ? customQuestions : REVIEW_QUESTIONS_UNITS_1_3;
+  const currentQ = questions[currentIdx] || questions[0];
 
   const handleSelectOption = (idx: number) => {
     if (isAnswered) return;
@@ -70,17 +77,22 @@ export const Stage4DragonChase: React.FC<Stage4DragonChaseProps> = ({
               <Flame className="w-8 h-8 animate-pulse text-rose-500" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-xs font-bold uppercase tracking-widest text-rose-400 bg-rose-950/60 px-2.5 py-0.5 rounded-full border border-rose-800/60">
-                  Stage 4: Tri-Unit Review Boss
+                  Stage 4: Tri-Unit Review Boss • Đề Tổng Hợp Vào 10
                 </span>
-                <span className="text-xs text-amber-300 font-semibold">Review Checkpoint Units 1-3</span>
+                {examCode && (
+                  <span className="text-[11px] font-mono text-amber-300 bg-amber-950/50 px-2 py-0.5 rounded border border-amber-800/40">
+                    Mã Đề: {examCode}
+                  </span>
+                )}
+                <span className="text-xs text-amber-300 font-semibold">{examTitle || 'Review Checkpoint Units 1-3'}</span>
               </div>
               <h2 className="text-xl md:text-2xl font-black text-white mt-1">
                 Dragon Chase & Grand Synthesis Escape
               </h2>
               <p className="text-xs md:text-sm text-slate-300 mt-0.5">
-                Having stolen the dragon eggs, the dragon gives chase! Answer comprehensive review questions (Units 1-3 & Core B1 grammar) to safely escape!
+                Rồng đuổi theo sau khi bạn trộm trứng! Trả lời bộ câu hỏi tổng hợp kiến thức đề thi vào 10 để thoát thân an toàn!
               </p>
             </div>
           </div>

@@ -9,6 +9,9 @@ interface Stage1EyeMonsterProps {
   onCorrectWord: () => void;
   onWrongWord: () => void;
   onCompleteStage: () => void;
+  examTitle?: string;
+  examCode?: string;
+  isAiGenerated?: boolean;
 }
 
 export const Stage1EyeMonster: React.FC<Stage1EyeMonsterProps> = ({
@@ -17,6 +20,9 @@ export const Stage1EyeMonster: React.FC<Stage1EyeMonsterProps> = ({
   onCorrectWord,
   onWrongWord,
   onCompleteStage,
+  examTitle,
+  examCode,
+  isAiGenerated,
 }) => {
   const [activeTab, setActiveTab] = useState<'study' | 'minigame'>('study');
   const [studiedWordIdx, setStudiedWordIdx] = useState(0);
@@ -97,17 +103,22 @@ export const Stage1EyeMonster: React.FC<Stage1EyeMonsterProps> = ({
               <Eye className="w-8 h-8 animate-pulse" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-xs font-bold uppercase tracking-widest text-amber-400 bg-amber-950/60 px-2.5 py-0.5 rounded-full border border-amber-800/60">
-                  Stage 1: Vocabulary Gauntlet
+                  Phần I: Ngữ Âm & Từ Vựng Chuyên Đề (4.0 điểm)
                 </span>
-                <span className="text-xs text-slate-400">{unitTitle}</span>
+                {examCode && (
+                  <span className="text-[11px] font-mono text-amber-300 bg-amber-950/50 px-2 py-0.5 rounded border border-amber-800/40">
+                    Mã Đề: {examCode}
+                  </span>
+                )}
+                <span className="text-xs text-slate-400">{examTitle || unitTitle}</span>
               </div>
               <h2 className="text-xl md:text-2xl font-black text-white mt-1">
-                Bypass the Eye Monster (B1 Vocabulary)
+                Bypass the Eye Monster • Ngữ Âm & Từ Vựng Luyện Thi Vào 10
               </h2>
               <p className="text-xs md:text-sm text-slate-300 mt-0.5">
-                Recognize target vocabulary through audio and sentence context. Dodge the Eye Monster&apos;s laser sensors to advance!
+                Nhận diện phiên âm IPA, trọng âm và từ vựng trọng điểm đề thi vào 10. Vượt qua cảm biến laser để tiếp cận ổ rồng!
               </p>
             </div>
           </div>
@@ -350,8 +361,13 @@ export const Stage1EyeMonster: React.FC<Stage1EyeMonsterProps> = ({
                     : '🚨 Laser tripped! The sleeping dragon shifts (+25% Alertness)'}
                 </p>
                 <p className="mt-1">
-                  Target Word: <span className="font-bold underline text-amber-300">{currentQuizItem.word}</span> {currentQuizItem.phonetic} — {currentQuizItem.meaningVi}.
+                  Từ Vựng / Khái Niệm Trọng Điểm: <span className="font-bold underline text-amber-300">{currentQuizItem.word}</span> {currentQuizItem.phonetic} — {currentQuizItem.meaningVi}.
                 </p>
+                {currentQuizItem.examTip && (
+                  <p className="mt-1.5 text-amber-300 bg-amber-950/60 p-2 rounded-lg border border-amber-800/40 font-semibold">
+                    💡 Mẹo Thi Vào 10: {currentQuizItem.examTip}
+                  </p>
+                )}
               </div>
             </div>
           )}

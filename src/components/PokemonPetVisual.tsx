@@ -124,9 +124,9 @@ const PokemonPetVisualComponent: React.FC<PokemonPetVisualProps> = ({
 
   // Combat animation classes
   let animClass = 'animate-pet-breathe';
-  if (combatState === 'attack') animClass = facing === 'back' ? 'animate-lunge-back' : 'animate-lunge-front';
-  else if (combatState === 'hit') animClass = 'animate-hit-shake';
-  else if (combatState === 'special') animClass = 'animate-cast-glow';
+  if (combatState === 'attack') animClass = facing === 'back' ? 'attackLunge animate-lunge-back' : 'attackLunge attackLungeOpponent animate-lunge-front';
+  else if (combatState === 'hit') animClass = 'hitFlash animate-hit-shake';
+  else if (combatState === 'special') animClass = facing === 'back' ? 'attackLunge animate-lunge-back' : 'attackLunge attackLungeOpponent animate-lunge-front';
   else if (combatState === 'victory') animClass = 'animate-bounce';
   else if (combatState === 'faint') animClass = 'opacity-40 translate-y-6 grayscale transition-all duration-700';
 

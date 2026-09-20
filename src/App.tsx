@@ -4,9 +4,10 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Shield, Sparkles, Volume2, Eye, Zap, Mic, Flame, Award, Footprints, RotateCcw, Egg, ArrowRight, HelpCircle, Brain } from 'lucide-react';
+import { Shield, Sparkles, Volume2, Eye, Zap, Mic, Flame, Award, Footprints, RotateCcw, Egg, ArrowRight, HelpCircle, Brain, RefreshCw, BookOpen, CheckCircle2 } from 'lucide-react';
 import { StageType, UnitData, StolenEgg, PetCompanion, GameState, SkillTreeState, CreatureRarity, PetAppearance, EggTierType } from './types';
 import { UNITS_DATA } from './data/unitsData';
+import { ExamPaper, fetchExamForUnit, getSeenSignatures } from './utils/examEngine';
 import { getEnchantmentConfig, CREATURES_CATALOG } from './data/creaturesData';
 import { getEvolvedPetForm } from './utils/petEvolution';
 import { PET_SKILL_NODES, getPassiveBonuses, calculateTotalSpentCrystals } from './data/skillTreeData';
@@ -376,6 +377,69 @@ export default function App() {
   const [isChaseModeActive, setIsChaseModeActive] = useState(false);
 
   const currentUnit = UNITS_DATA.find((u) => u.id === currentUnitId) || UNITS_DATA[0];
+
+  // Grade 10 Entrance Exam Paper State (1 Unit = 1 Đề Thi Vào 10 Theo Chủ Đề)
+  const [activeExamPaper, setActiveExamPaper] = useState<ExamPaper | null>(null);
+  const [examDifficulty, setExamDifficulty] = useState<'standard' | 'advanced_chuyen'>('standard');
+  const [isGeneratingExam, setIsGeneratingExam] = useState(false);
+  const [examGenerateNotice, setExamGenerateNotice] = useState<string | null>(null);
+  const [totalSeenQuestions, setTotalSeenQuestions] = useState<number>(() => getSeenSignatures().length);
+
+  // Auto-fetch or prepare Grade 10 Entrance Exam paper when unit or difficulty changes
+  useEffect(() => {
+    let isMounted = true;
+    const loadExam = async () => {
+      setIsGeneratingExam(true);
+      try {
+        const paper = await fetchExamForUnit(
+          currentUnit.id,
+          currentUnit.title,
+          currentUnit.subtitle,
+          examDifficulty,
+          false
+        );
+        if (isMounted) {
+          setActiveExamPaper(paper);
+          setTotalSeenQuestions(getSeenSignatures().length);
+        }
+      } catch (err) {
+        console.warn('Could not load unit exam paper:', err);
+      } finally {
+        if (isMounted) {
+          setIsGeneratingExam(false);
+        }
+      }
+    };
+    loadExam();
+    return () => {
+      isMounted = false;
+    };
+  }, [currentUnit.id, examDifficulty]);
+
+  // Force AI to generate a brand new, non-repeating exam paper
+  const handleRegenerateExam = async () => {
+    setIsGeneratingExam(true);
+    setExamGenerateNotice('AI Gemini đang tạo đề thi Tuyển sinh vào 10 mới (100% không trùng lặp)...');
+    try {
+      const paper = await fetchExamForUnit(
+        currentUnit.id,
+        currentUnit.title,
+        currentUnit.subtitle,
+        examDifficulty,
+        true // force unique regeneration
+      );
+      setActiveExamPaper(paper);
+      setTotalSeenQuestions(getSeenSignatures().length);
+      setExamGenerateNotice(`✨ Đã tạo Đề thi mới (${paper.examCode})! Chủ đề: ${paper.examTitle}`);
+      setTimeout(() => setExamGenerateNotice(null), 4000);
+    } catch (err) {
+      console.warn('Failed to regenerate exam:', err);
+      setExamGenerateNotice('Đã cập nhật đề thi mới từ ngân hàng khảo thí!');
+      setTimeout(() => setExamGenerateNotice(null), 3000);
+    } finally {
+      setIsGeneratingExam(false);
+    }
+  };
 
   // Natural Alert Cooldown passive (Dragon Repose)
   useEffect(() => {
@@ -923,6 +987,88 @@ export default function App() {
           refreshTrigger={dailyMissionRefreshTrigger}
         />
 
+        {/* Entrance Exam Thematic Paper Header (1 Unit = 1 Đề Thi Vào 10 Theo Chủ Đề) */}
+        {!isChaseModeActive && (
+          <div className="bg-gradient-to-r from-slate-900 via-indigo-950/70 to-slate-900 border border-indigo-500/30 rounded-3xl p-5 shadow-xl relative overflow-hidden backdrop-blur-md">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                  <span className="text-xs font-black uppercase tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 px-3 py-1 rounded-full flex items-center gap-1.5">
+                    <BookOpen className="w-3.5 h-3.5" />
+                    <span>ĐỀ THI TUYỂN SINH VÀO LỚP 10 THPT</span>
+                  </span>
+                  <span className="text-xs font-mono font-bold bg-amber-950/70 text-amber-300 border border-amber-800/60 px-2.5 py-1 rounded-lg">
+                    {activeExamPaper?.examCode || `10-THPT-${currentUnit.id.toUpperCase()}`}
+                  </span>
+                  <span className={`text-xs font-bold px-2.5 py-1 rounded-lg border ${
+                    activeExamPaper?.isAiGenerated
+                      ? 'bg-purple-950/80 text-purple-300 border-purple-700/60'
+                      : 'bg-teal-950/80 text-teal-300 border-teal-700/60'
+                  }`}>
+                    {activeExamPaper?.isAiGenerated ? '⚡ AI Gemini Đang Phục Vụ' : '📚 Ngân Hàng Khảo Thí Chuẩn'}
+                  </span>
+                  <span className="text-xs font-medium text-slate-400 bg-slate-950/60 px-2.5 py-1 rounded-lg border border-slate-800">
+                    🛡️ Chống trùng lặp ({totalSeenQuestions} câu đã lưu)
+                  </span>
+                </div>
+                <h3 className="text-lg md:text-xl font-black text-white flex items-center gap-2">
+                  <span>{activeExamPaper?.examTitle || `Chuyên Đề Trọng Điểm: ${currentUnit.title}`}</span>
+                </h3>
+                <p className="text-xs text-slate-300 mt-1">
+                  1 Unit = 1 Đề thi vào 10 toàn diện chuẩn thang điểm 10. Vô hạn thời gian suy nghĩ! Trả lời đúng để cướp Trứng Rồng.
+                </p>
+              </div>
+
+              {/* Exam Actions & Difficulty Controls */}
+              <div className="flex flex-wrap items-center gap-2.5">
+                <div className="flex bg-slate-950/80 p-1 rounded-xl border border-slate-800">
+                  <button
+                    onClick={() => setExamDifficulty('standard')}
+                    disabled={isGeneratingExam}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      examDifficulty === 'standard'
+                        ? 'bg-indigo-600 text-white shadow-md'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    🎯 Chuẩn Vào 10 (8-9đ)
+                  </button>
+                  <button
+                    onClick={() => setExamDifficulty('advanced_chuyen')}
+                    disabled={isGeneratingExam}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      examDifficulty === 'advanced_chuyen'
+                        ? 'bg-rose-600 text-white shadow-md'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    🔥 Đề Chuyên 10 (9.5-10đ)
+                  </button>
+                </div>
+
+                <button
+                  id="btn-regenerate-exam"
+                  onClick={handleRegenerateExam}
+                  disabled={isGeneratingExam}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs shadow-lg shadow-amber-950/40 flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+                  title="AI sẽ sinh đề thi mới hoàn toàn không trùng lặp câu hỏi cũ"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isGeneratingExam ? 'animate-spin' : ''}`} />
+                  <span>{isGeneratingExam ? 'Đang Tạo Đề...' : '✨ AI Đổi Đề Mới'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Notification alert if regenerating */}
+            {examGenerateNotice && (
+              <div className="mt-3.5 bg-indigo-950/90 border border-indigo-500/50 rounded-xl p-2.5 text-xs text-indigo-200 font-semibold flex items-center gap-2 animate-fadeIn">
+                <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>{examGenerateNotice}</span>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Mission Status Bar (Only in Unit Missions) */}
         {!isChaseModeActive && (
           <div className="space-y-4">
@@ -950,8 +1096,8 @@ export default function App() {
                 }`}
               >
                 <Eye className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Stage 1:</span>
-                <span>The All-Seeing Eye</span>
+                <span className="hidden sm:inline">Phần I (4đ):</span>
+                <span>Ngữ Âm & Từ Vựng</span>
               </button>
 
               <button
@@ -964,8 +1110,8 @@ export default function App() {
                 }`}
               >
                 <Zap className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Stage 2:</span>
-                <span>Grammar Trap</span>
+                <span className="hidden sm:inline">Phần II (3đ):</span>
+                <span>Bẫy Ngữ Pháp</span>
               </button>
 
               <button
@@ -978,8 +1124,8 @@ export default function App() {
                 }`}
               >
                 <Mic className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Stage 3:</span>
-                <span>Vocal Cipher</span>
+                <span className="hidden sm:inline">Phần III (3đ):</span>
+                <span>Mật Mã Khẩu Ngữ</span>
               </button>
             </div>
           </div>
@@ -1020,30 +1166,48 @@ export default function App() {
               setIsChaseModeActive(false);
               handleSelectUnit('unit-1');
             }}
+            examTitle="Đề Thi Tổng Hợp Luyện Thi Tuyển Sinh Vào 10 (Review Units 1-3)"
+            examCode="10-THPT-CHASE-01"
           />
         ) : activeStage === 'stage1_eye' ? (
           <Stage1EyeMonster
-            vocabularyList={currentUnit.vocabulary}
+            vocabularyList={
+              activeExamPaper?.stage1Vocabulary && activeExamPaper.stage1Vocabulary.length > 0
+                ? activeExamPaper.stage1Vocabulary
+                : currentUnit.vocabulary
+            }
             unitTitle={currentUnit.title}
             onCorrectWord={handleStage1Correct}
             onWrongWord={handleWrongAnswer}
             onCompleteStage={handleStage1Complete}
+            examTitle={activeExamPaper?.examTitle}
+            examCode={activeExamPaper?.examCode}
+            isAiGenerated={activeExamPaper?.isAiGenerated}
           />
         ) : activeStage === 'stage2_grammar' ? (
           <Stage2GrammarTrap
-            grammarTraps={currentUnit.grammarTraps}
+            grammarTraps={
+              activeExamPaper?.stage2GrammarTraps && activeExamPaper.stage2GrammarTraps.length > 0
+                ? activeExamPaper.stage2GrammarTraps
+                : currentUnit.grammarTraps
+            }
             unitTitle={currentUnit.title}
             onCorrectAnswer={handleStage2Correct}
             onWrongAnswer={handleWrongAnswer}
             onCompleteStage={handleStage2Complete}
+            examTitle={activeExamPaper?.examTitle}
+            examCode={activeExamPaper?.examCode}
+            isAiGenerated={activeExamPaper?.isAiGenerated}
           />
         ) : (
           <Stage3VoiceCode
-            speakingCipher={currentUnit.speakingCipher}
+            speakingCipher={activeExamPaper?.speakingCipher || currentUnit.speakingCipher}
             unitTitle={currentUnit.title}
             onCorrectSpeaking={handleStage3Correct}
             onWrongSpeaking={handleWrongAnswer}
             onEggStolenSuccess={handleEggStolenSuccess}
+            examTitle={activeExamPaper?.examTitle}
+            examCode={activeExamPaper?.examCode}
           />
         )}
       </main>
@@ -1227,7 +1391,7 @@ export default function App() {
         onClose={() => setIsPokemonPvPOpen(false)}
         pets={hatchedPets}
         dragonCrystals={dragonCrystals}
-        onAddDragonCrystals={(amt) => setDragonCrystals((prev) => prev + amt)}
+        onAddDragonCrystals={(amt) => setDragonCrystals((prev) => Math.max(0, prev + amt))}
         onOpenHatchery={() => {
           setIsPokemonPvPOpen(false);
           setIsHatcheryOpen(true);

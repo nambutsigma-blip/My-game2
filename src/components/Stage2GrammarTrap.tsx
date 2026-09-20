@@ -9,6 +9,9 @@ interface Stage2GrammarTrapProps {
   onCorrectAnswer: (earnedBoots: boolean) => void;
   onWrongAnswer: () => void;
   onCompleteStage: () => void;
+  examTitle?: string;
+  examCode?: string;
+  isAiGenerated?: boolean;
 }
 
 export const Stage2GrammarTrap: React.FC<Stage2GrammarTrapProps> = ({
@@ -17,6 +20,9 @@ export const Stage2GrammarTrap: React.FC<Stage2GrammarTrapProps> = ({
   onCorrectAnswer,
   onWrongAnswer,
   onCompleteStage,
+  examTitle,
+  examCode,
+  isAiGenerated,
 }) => {
   const [currentTrapIdx, setCurrentTrapIdx] = useState(0);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
@@ -31,6 +37,26 @@ export const Stage2GrammarTrap: React.FC<Stage2GrammarTrapProps> = ({
   const [timerActive, setTimerActive] = useState(true);
 
   const currentTrap = grammarTraps[currentTrapIdx] || grammarTraps[0];
+
+  const questionTag = React.useMemo(() => {
+    const text = `${currentTrap.instruction} ${currentTrap.sentencePrompt}`.toLowerCase();
+    if (text.includes('underlined') || text.includes('correction') || text.includes('lỗi sai') || currentTrap.sentencePrompt.includes('(A)')) {
+      return {
+        label: '🔍 TÌM LỖI SAI (ERROR IDENTIFICATION • ĐỀ VÀO 10)',
+        color: 'bg-rose-950/80 text-rose-300 border-rose-700/60',
+      };
+    }
+    if (text.includes('closest in meaning') || text.includes('tương đương') || text.includes('rewrite') || text.includes('closest')) {
+      return {
+        label: '🔄 VIẾT LẠI CÂU TƯƠNG ĐƯƠNG (SENTENCE TRANSFORMATION • ĐỀ VÀO 10)',
+        color: 'bg-amber-950/80 text-amber-300 border-amber-700/60',
+      };
+    }
+    return {
+      label: '🎯 BẪY NGỮ PHÁP PHÂN HOÁ 9+ (MULTIPLE CHOICE • ĐỀ VÀO 10)',
+      color: 'bg-indigo-950/80 text-indigo-300 border-indigo-700/60',
+    };
+  }, [currentTrap]);
 
   useEffect(() => {
     let timer: any = null;
@@ -102,17 +128,22 @@ export const Stage2GrammarTrap: React.FC<Stage2GrammarTrapProps> = ({
               <Zap className="w-8 h-8 animate-pulse" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-xs font-bold uppercase tracking-widest text-indigo-400 bg-indigo-950/60 px-2.5 py-0.5 rounded-full border border-indigo-800/60">
-                  Stage 2: Grammar Defense
+                  Phần II: Bẫy Ngữ Pháp & Cú Pháp Nâng Cao (3.0 điểm)
                 </span>
-                <span className="text-xs text-slate-400">{unitTitle}</span>
+                {examCode && (
+                  <span className="text-[11px] font-mono text-amber-300 bg-amber-950/50 px-2 py-0.5 rounded border border-amber-800/40">
+                    Mã Đề: {examCode}
+                  </span>
+                )}
+                <span className="text-xs text-slate-400">{examTitle || unitTitle}</span>
               </div>
               <h2 className="text-xl md:text-2xl font-black text-white mt-1">
-                Acoustic Grammar Traps (Entrance Exam Focus)
+                Acoustic Grammar Traps • Đề Thi Tuyển Sinh Vào 10
               </h2>
               <p className="text-xs md:text-sm text-slate-300 mt-0.5">
-                Target structures for High School Entrance & Destination B1. Vô hạn thời gian đọc! Trả lời trong 10s đầu để nhận thêm &quot;Giày Tàng Hình&quot; (-10% Báo động).
+                Bám sát cấu trúc đề thi Sở GD&ĐT & Destination B1. Vô hạn thời gian suy nghĩ! Trả lời trong 10s đầu để nhận thêm &quot;Giày Tàng Hình&quot; (-10% Báo động).
               </p>
             </div>
           </div>
@@ -156,11 +187,16 @@ export const Stage2GrammarTrap: React.FC<Stage2GrammarTrapProps> = ({
 
       {/* Interactive Grammar Trap Core */}
       <div className="bg-slate-900/90 border border-slate-700/80 rounded-3xl p-6 backdrop-blur-md">
-        {/* Instruction */}
-        <div className="flex items-center justify-between gap-2 mb-3">
-          <span className="text-xs font-extrabold text-indigo-400 uppercase tracking-wider">
-            Deactivation Mission #{currentTrapIdx + 1}
-          </span>
+        {/* Instruction & Exam Tag */}
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <div className="flex items-center gap-2">
+            <span className={`text-[11px] font-extrabold uppercase px-2.5 py-1 rounded-lg border ${questionTag.color}`}>
+              {questionTag.label}
+            </span>
+            <span className="text-xs font-mono text-slate-400">
+              Câu {currentTrapIdx + 1}/{grammarTraps.length}
+            </span>
+          </div>
           {gotStealthBoots && (
             <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-xs px-2.5 py-1 rounded-full font-bold flex items-center gap-1 animate-bounce">
               <Sparkles className="w-3.5 h-3.5" />
@@ -175,8 +211,15 @@ export const Stage2GrammarTrap: React.FC<Stage2GrammarTrapProps> = ({
 
         {/* Sentence Prompt in Wire Frame */}
         <div className="bg-slate-950 border-2 border-indigo-900/60 rounded-2xl p-5 mb-5 relative overflow-hidden">
-          <div className="text-xs text-indigo-300 font-mono uppercase tracking-wider mb-2 flex items-center gap-1">
-            <span>⚡ Acoustic Tripwire Circuit</span>
+          <div className="text-xs text-indigo-300 font-mono uppercase tracking-wider mb-2 flex items-center justify-between">
+            <span className="flex items-center gap-1.5">
+              <span>⚡ Ngữ Cảnh Bẫy Ngữ Pháp (Acoustic Tripwire)</span>
+            </span>
+            {isAiGenerated && (
+              <span className="text-[10px] text-amber-400 bg-amber-950/60 border border-amber-800/60 px-2 py-0.5 rounded-md font-bold">
+                ✨ AI Generated • Unique
+              </span>
+            )}
           </div>
           <p className="text-lg md:text-xl font-bold text-white leading-relaxed">
             {currentTrap.sentencePrompt}
@@ -228,9 +271,20 @@ export const Stage2GrammarTrap: React.FC<Stage2GrammarTrapProps> = ({
                 {isCorrect ? '✨ TRIPWIRE DISARMED!' : '🚨 TRIPWIRE TRIGGERED!'}
               </span>
             </div>
-            <p className="font-medium mb-1.5">
-              <span className="font-bold underline text-indigo-300">Exam Grammar Concept:</span> {currentTrap.grammarRuleExplaining}
+            <p className="font-medium mb-2 leading-relaxed">
+              <span className="font-bold underline text-indigo-300">Phân Tích Ngữ Pháp & Đáp Án:</span> {currentTrap.grammarRuleExplaining}
             </p>
+
+            {currentTrap.examTip && (
+              <div className="mt-2 bg-amber-950/50 border border-amber-500/30 rounded-xl p-3 text-amber-200 font-semibold text-xs flex items-start gap-2">
+                <span className="text-base">💡</span>
+                <div>
+                  <span className="font-bold text-amber-300 block mb-0.5">MẸO LÀM BÀI VÀO 10:</span>
+                  <span>{currentTrap.examTip}</span>
+                </div>
+              </div>
+            )}
+
             {gotStealthBoots && (
               <p className="text-emerald-300 font-bold mt-2 bg-emerald-900/40 p-2 rounded-lg border border-emerald-500/30">
                 🎉 Swift reflex under 5 seconds! Received &quot;Stealth Boots&quot; reducing alarm by 10%!

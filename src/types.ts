@@ -27,6 +27,8 @@ export interface VocabularyItem {
   exampleVi: string;
   keySound: string; // e.g. "/f/", "/s/", "/i:/"
   distractors: string[]; // for the Eye Monster laser game
+  examTip?: string;
+  questionType?: string;
 }
 
 export interface GrammarTrapItem {
@@ -37,6 +39,10 @@ export interface GrammarTrapItem {
   correctAnswer: string;
   grammarRuleExplaining: string;
   scrambledWords?: string[];
+  examTip?: string;
+  questionType?: string;
+  difficulty?: 'standard' | 'advanced_chuyen';
+  underlinedParts?: { key: 'A' | 'B' | 'C' | 'D'; text: string; isError: boolean; correction: string }[];
 }
 
 export interface SpeakingCipher {
@@ -339,4 +345,26 @@ export interface DailyMissionData {
   isGrandRewardClaimed: boolean;
   streakDays: number;
   lastCompletedDate?: string;
+}
+
+export interface BattleHistoryRecord {
+  id: string;
+  timestamp: number;
+  dateFormatted: string;
+  outcome: 'victory' | 'defeat';
+  playerPetName: string;
+  playerPetAvatar: string;
+  playerPetElement: string;
+  playerPetLevel: number;
+  opponentName: string;
+  opponentTitle: string;
+  opponentPetName: string;
+  opponentPetAvatar: string;
+  opponentPetElement: string;
+  opponentPetLevel: number;
+  crystalDelta: number; // Positive (+60) for victory, negative (-20) for defeat
+  rewardExp?: number;
+  badgeEarned?: string;
+  badgeIcon?: string;
+  turnsCount: number;
 }
