@@ -269,3 +269,74 @@ export interface PetSkillNode {
 }
 
 export type SkillTreeState = Record<string, number>; // { [skillId]: currentLevel }
+
+export type DailyTaskType = 'meaning_match' | 'sentence_cloze' | 'spell_scramble';
+
+export interface DailyVocabularyTaskItem {
+  id: string;
+  word: string;
+  phonetic: string;
+  meaningVi: string;
+  exampleEn: string;
+  exampleVi: string;
+  keySound: string;
+  distractors: string[];
+  unitTitle: string;
+}
+
+export interface MeaningQuizQuestion {
+  id: string;
+  wordItem: DailyVocabularyTaskItem;
+  prompt: string;
+  options: string[];
+  correctAnswer: string;
+  explanation: string;
+}
+
+export interface SentenceClozeQuestion {
+  id: string;
+  wordItem: DailyVocabularyTaskItem;
+  sentenceWithBlank: string;
+  options: string[];
+  correctWord: string;
+  hintPhonetic: string;
+  hintMeaning: string;
+  explanation: string;
+}
+
+export interface SpellScrambleQuestion {
+  id: string;
+  wordItem: DailyVocabularyTaskItem;
+  scrambledLetters: string[];
+  targetWord: string;
+  hintPhonetic: string;
+  hintMeaning: string;
+}
+
+export interface DailyMissionTask {
+  id: string;
+  type: DailyTaskType;
+  title: string;
+  subtitle: string;
+  description: string;
+  badge: string;
+  iconName: string;
+  crystalReward: number;
+  totalQuestions: number;
+  completedQuestions: number;
+  isCompleted: boolean;
+  isClaimed: boolean;
+  meaningQuestions?: MeaningQuizQuestion[];
+  clozeQuestions?: SentenceClozeQuestion[];
+  spellQuestions?: SpellScrambleQuestion[];
+}
+
+export interface DailyMissionData {
+  dateKey: string;
+  resetTimestamp: number;
+  tasks: DailyMissionTask[];
+  grandRewardCrystals: number;
+  isGrandRewardClaimed: boolean;
+  streakDays: number;
+  lastCompletedDate?: string;
+}

@@ -30,6 +30,9 @@ import { PokemonPvPArenaModal } from './components/PokemonPvPArenaModal';
 import { SetAccountNameModal } from './components/SetAccountNameModal';
 import { AiThinkingAssistantModal } from './components/AiThinkingAssistantModal';
 import { AuthModal } from './components/AuthModal';
+import { DailyMissionModal } from './components/DailyMissionModal';
+import { DailyMissionBanner } from './components/DailyMissionBanner';
+import { getDailyMissionData } from './utils/dailyMissionManager';
 import { auth, onAuthStateChanged, signOut, updateProfile, User, db, collection, getDocs, doc, setDoc, deleteDoc, serverTimestamp } from './lib/firebase';
 import { AppUser, getStoredUser } from './utils/authHelper';
 import { playAlarmSiren, playDragonGrowl, playBootsBonus, playSuccessChime } from './utils/soundEffects';
@@ -209,6 +212,25 @@ export default function App() {
   const [selectedAppearancePetId, setSelectedAppearancePetId] = useState<string | null>(null);
   const [isPokemonPvPOpen, setIsPokemonPvPOpen] = useState(false);
   const [pendingGiftsCount, setPendingGiftsCount] = useState(0);
+
+  // Daily Mission System State
+  const [isDailyMissionOpen, setIsDailyMissionOpen] = useState(false);
+  const [dailyMissionsCompleted, setDailyMissionsCompleted] = useState(0);
+  const [hasUnclaimedDailyRewards, setHasUnclaimedDailyRewards] = useState(false);
+  const [dailyMissionRefreshTrigger, setDailyMissionRefreshTrigger] = useState(0);
+
+  useEffect(() => {
+    try {
+      const data = getDailyMissionData();
+      const completed = data.tasks.filter((t) => t.isCompleted).length;
+      const allDone = completed === data.tasks.length;
+      const unclaimed =
+        data.tasks.some((t) => t.isCompleted && !t.isClaimed) ||
+        (allDone && !data.isGrandRewardClaimed);
+      setDailyMissionsCompleted(completed);
+      setHasUnclaimedDailyRewards(unclaimed);
+    } catch {}
+  }, [dailyMissionRefreshTrigger, isDailyMissionOpen]);
 
   const handleSavePetAppearance = (petId: string, appearance: PetAppearance) => {
     setHatchedPets((prev) =>
@@ -888,10 +910,19 @@ export default function App() {
         onOpenAiAssistant={() => setIsAiAssistantOpen(true)}
         currentUser={currentUser as AppUser | null}
         onOpenAuth={() => setIsAuthModalOpen(true)}
+        onOpenDailyMissions={() => setIsDailyMissionOpen(true)}
+        dailyMissionsCompleted={dailyMissionsCompleted}
+        hasUnclaimedDailyRewards={hasUnclaimedDailyRewards}
       />
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-6 space-y-6">
+        {/* Daily Mission 24h Interactive Banner */}
+        <DailyMissionBanner
+          onOpenDailyMissions={() => setIsDailyMissionOpen(true)}
+          refreshTrigger={dailyMissionRefreshTrigger}
+        />
+
         {/* Mission Status Bar (Only in Unit Missions) */}
         {!isChaseModeActive && (
           <div className="space-y-4">
@@ -1207,6 +1238,31 @@ export default function App() {
           }
           setIsPokemonPvPOpen(false);
           setIsAppearanceStudioOpen(true);
+        }}
+      />
+
+      {/* Daily Vocabulary Mission 24-Hour System Modal */}
+      <DailyMissionModal
+        isOpen={isDailyMissionOpen}
+        onClose={() => {
+          setIsDailyMissionOpen(false);
+          setDailyMissionRefreshTrigger((prev) => prev + 1);
+        }}
+        dragonCrystals={dragonCrystals}
+        onRewardCrystals={(amt) => {
+          setDragonCrystals((prev) => prev + amt);
+          setDailyMissionRefreshTrigger((prev) => prev + 1);
+        }}
+        onMissionProgressUpdate={(completed, total) => {
+          setDailyMissionsCompleted(completed);
+          try {
+            const data = getDailyMissionData();
+            const allDone = completed === total;
+            const unclaimed =
+              data.tasks.some((t) => t.isCompleted && !t.isClaimed) ||
+              (allDone && !data.isGrandRewardClaimed);
+            setHasUnclaimedDailyRewards(unclaimed);
+          } catch {}
         }}
       />
 

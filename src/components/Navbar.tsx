@@ -1,5 +1,5 @@
 import React from 'react';
-import { HelpCircle, Flame, Egg, Swords, ChevronLeft, ChevronRight, Sparkles, Zap, BookOpen, Globe, Palette, RotateCcw, Edit3, User, Brain, LogIn, Mail, Check } from 'lucide-react';
+import { HelpCircle, Flame, Egg, Swords, ChevronLeft, ChevronRight, Sparkles, Zap, BookOpen, Globe, Palette, RotateCcw, Edit3, User, Brain, LogIn, Mail, Check, Target } from 'lucide-react';
 import { UnitData, StolenEgg } from '../types';
 import { AppUser } from '../utils/authHelper';
 
@@ -29,6 +29,9 @@ interface NavbarProps {
   onOpenAiAssistant?: () => void;
   currentUser?: AppUser | null;
   onOpenAuth?: () => void;
+  onOpenDailyMissions?: () => void;
+  dailyMissionsCompleted?: number;
+  hasUnclaimedDailyRewards?: boolean;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -56,6 +59,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenAiAssistant,
   currentUser,
   onOpenAuth,
+  onOpenDailyMissions,
+  dailyMissionsCompleted = 0,
+  hasUnclaimedDailyRewards = false,
 }) => {
   const currentIndex = units.findIndex((u) => u.id === currentUnitId);
   const prevUnit = currentIndex > 0 ? units[currentIndex - 1] : null;
@@ -275,6 +281,28 @@ export const Navbar: React.FC<NavbarProps> = ({
               </span>
             )}
           </button>
+
+          {/* Daily Missions 24h Button */}
+          {onOpenDailyMissions && (
+            <button
+              id="nav-daily-missions-btn"
+              onClick={onOpenDailyMissions}
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-black cursor-pointer transition-all active:scale-95 shadow-sm ${
+                hasUnclaimedDailyRewards
+                  ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 border-amber-400 animate-pulse shadow-amber-950/50'
+                  : dailyMissionsCompleted === 3
+                  ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-300'
+                  : 'bg-gradient-to-r from-amber-950/70 to-slate-900 border-amber-500/40 text-amber-200 hover:border-amber-400'
+              }`}
+              title="Nhiệm Vụ Từ Vựng Hàng Ngày (3 thử thách mỗi 24 giờ • Thưởng Tinh Thể Rồng)"
+            >
+              <Target className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span className="hidden sm:inline">Nhiệm Vụ Ngày</span>
+              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-slate-950/80 text-amber-300 font-bold border border-amber-500/30">
+                {hasUnclaimedDailyRewards ? '🎁 Nhận Quà' : `${dailyMissionsCompleted}/3`}
+              </span>
+            </button>
+          )}
 
           {/* Dragon Crystals Wallet */}
           <div
