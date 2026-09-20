@@ -1147,6 +1147,8 @@ export default function App() {
         hatchedPets={hatchedPets}
         dragonCrystals={dragonCrystals}
         skillTreeState={skillTreeState}
+        stolenEggs={stolenEggs}
+        onRewardCrystals={(amt) => setDragonCrystals((prev) => prev + amt)}
       />
 
       {/* Set / Edit Account Name Modal */}

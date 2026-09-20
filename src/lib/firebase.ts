@@ -1,5 +1,17 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, updateProfile, User } from 'firebase/auth';
+import {
+  getAuth,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signOut,
+  onAuthStateChanged,
+  updateProfile,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  sendEmailVerification,
+  sendPasswordResetEmail,
+  User,
+} from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc, collection, getDocs, updateDoc, increment, serverTimestamp, addDoc, deleteDoc, query, where, onSnapshot } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
@@ -15,6 +27,18 @@ const app = initializeApp({
 export const auth = getAuth(app);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId || '(default)');
 export const googleProvider = new GoogleAuthProvider();
+
+export {
+  signInWithPopup,
+  signOut,
+  onAuthStateChanged,
+  updateProfile,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  sendEmailVerification,
+  sendPasswordResetEmail,
+};
+export type { User };
 
 export enum OperationType {
   CREATE = 'create',
@@ -63,6 +87,5 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   return errInfo;
 }
 
-export { signInWithPopup, signOut, onAuthStateChanged, updateProfile, doc, setDoc, getDoc, collection, getDocs, updateDoc, increment, serverTimestamp, addDoc, deleteDoc, query, where, onSnapshot };
-export type { User };
+export { doc, setDoc, getDoc, collection, getDocs, updateDoc, increment, serverTimestamp, addDoc, deleteDoc, query, where, onSnapshot };
 

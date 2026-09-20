@@ -1,5 +1,5 @@
 import React from 'react';
-import { HelpCircle, Flame, Egg, Swords, ChevronLeft, ChevronRight, Sparkles, Zap, BookOpen, Globe, Palette, RotateCcw, Edit3, User, Brain, LogIn } from 'lucide-react';
+import { HelpCircle, Flame, Egg, Swords, ChevronLeft, ChevronRight, Sparkles, Zap, BookOpen, Globe, Palette, RotateCcw, Edit3, User, Brain, LogIn, Mail, Check } from 'lucide-react';
 import { UnitData, StolenEgg } from '../types';
 import { AppUser } from '../utils/authHelper';
 
@@ -174,29 +174,48 @@ export const Navbar: React.FC<NavbarProps> = ({
               <button
                 id="nav-user-profile-btn"
                 onClick={onOpenAuth}
-                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-900/95 hover:bg-slate-850 border border-emerald-500/50 hover:border-emerald-400 text-xs font-bold text-emerald-200 cursor-pointer transition-all active:scale-95 shadow-sm"
-                title="Tài khoản Cloud đang hoạt động - Bấm để quản lý hoặc đồng bộ"
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-900/95 hover:bg-slate-850 border border-rose-500/40 hover:border-rose-400 text-xs font-bold text-rose-200 cursor-pointer transition-all active:scale-95 shadow-sm"
+                title={
+                  currentUser.emailVerified
+                    ? 'Tài khoản Gmail đã xác minh chính chủ - Bấm để quản lý'
+                    : 'Tài khoản đang hoạt động - Bấm để kiểm tra xác thực Gmail'
+                }
               >
                 <div className="relative flex items-center justify-center">
-                  <div className="w-2 h-2 rounded-full bg-emerald-400" />
-                  <div className="absolute w-2 h-2 rounded-full bg-emerald-400 animate-ping opacity-75" />
+                  <div
+                    className={`w-2 h-2 rounded-full ${
+                      currentUser.emailVerified ? 'bg-emerald-400' : 'bg-amber-400'
+                    }`}
+                  />
+                  <div
+                    className={`absolute w-2 h-2 rounded-full animate-ping opacity-75 ${
+                      currentUser.emailVerified ? 'bg-emerald-400' : 'bg-amber-400'
+                    }`}
+                  />
                 </div>
                 <span className="max-w-[70px] sm:max-w-[110px] truncate text-white">
                   {currentUser.displayName || accountName || 'Tài Khoản'}
                 </span>
-                <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-950 text-emerald-300 font-bold border border-emerald-500/30 hidden sm:inline">
-                  Cloud ✓
-                </span>
+                {currentUser.emailVerified ? (
+                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-950 text-emerald-300 font-black border border-emerald-500/40 flex items-center gap-0.5">
+                    <Check className="w-2.5 h-2.5" />
+                    Gmail ✓
+                  </span>
+                ) : (
+                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-rose-950 text-rose-300 font-bold border border-rose-500/30 hidden sm:inline">
+                    Gmail
+                  </span>
+                )}
               </button>
             ) : (
               <button
                 id="nav-auth-btn"
                 onClick={onOpenAuth}
-                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs cursor-pointer transition-all active:scale-95 shadow-md shadow-amber-950/40 animate-pulse"
-                title="Đăng nhập tài khoản Cloud (Google hoặc Đăng Nhập Nhanh)"
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-rose-600 via-red-500 to-amber-500 hover:from-rose-500 hover:to-red-400 text-white font-black text-xs cursor-pointer transition-all active:scale-95 shadow-md shadow-rose-950/50"
+                title="Xác thực tài khoản Gmail chính chủ hoặc Đăng nhập Cloud"
               >
-                <LogIn className="w-3.5 h-3.5 fill-slate-950" />
-                <span>Đăng Nhập</span>
+                <Mail className="w-3.5 h-3.5 text-white" />
+                <span>Xác Thực Gmail</span>
               </button>
             )
           )}

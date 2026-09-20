@@ -1119,33 +1119,34 @@ export const OnlineMultiplayerModal: React.FC<OnlineMultiplayerModalProps> = ({
               </div>
             ) : (
               <div className="flex items-center gap-1.5 sm:gap-2">
+                {onOpenAuth && (
+                  <button
+                    onClick={onOpenAuth}
+                    className="px-3 py-2 rounded-xl bg-gradient-to-r from-rose-600 via-red-500 to-amber-500 hover:from-rose-500 text-white font-black text-xs flex items-center gap-1.5 shadow-md shadow-rose-950/40 cursor-pointer active:scale-95 transition-all"
+                    title="Xác thực tài khoản Gmail chính chủ để lưu tiến độ và nhận quà"
+                  >
+                    <Mail className="w-3.5 h-3.5" />
+                    <span>Xác Thực Gmail</span>
+                  </button>
+                )}
                 <button
                   onClick={handleFastCloudLoginDirect}
                   disabled={loadingAuth}
-                  className="px-3 py-2 rounded-xl bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 hover:from-amber-400 text-slate-950 font-black text-xs flex items-center gap-1.5 shadow-md shadow-amber-950/40 cursor-pointer active:scale-95 transition-all disabled:opacity-50"
+                  className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold text-xs flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all disabled:opacity-50"
                   title="Đăng nhập ngay lập tức - Hoạt động 100% trên bản ngoài mà không cần Google OAuth"
                 >
-                  <Zap className="w-3.5 h-3.5 fill-slate-950" />
-                  <span>Đăng Nhập Nhanh</span>
+                  <Zap className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                  <span className="hidden sm:inline">Chơi Nhanh</span>
                 </button>
                 <button
                   onClick={handleGoogleLogin}
                   disabled={loadingAuth}
-                  className="px-3 py-2 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 text-white font-black text-xs flex items-center gap-1.5 shadow-md shadow-rose-950/40 cursor-pointer active:scale-95 transition-all disabled:opacity-50"
-                  title="Đăng nhập bằng tài khoản Google (Yêu cầu domain đã cấp phép trong Firebase)"
+                  className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all disabled:opacity-50"
+                  title="Đăng nhập bằng tài khoản Google"
                 >
                   <LogIn className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">Google</span>
                 </button>
-                {onOpenAuth && (
-                  <button
-                    onClick={onOpenAuth}
-                    className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-bold cursor-pointer transition-colors"
-                    title="Mở bảng điều khiển xác thực & hướng dẫn tên miền"
-                  >
-                    <Globe className="w-3.5 h-3.5 text-indigo-400" />
-                  </button>
-                )}
               </div>
             )}
           </div>
