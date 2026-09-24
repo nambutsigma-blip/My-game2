@@ -231,8 +231,8 @@ export const ARENA_QUESTIONS: ArenaQuestion[] = [
     type: 'vocab',
     typeLabel: 'B1 Rural Life Vocabulary',
     question: 'Which word means "to collect or gather ripe crops" from fields in rural life (Unit 2)?',
-    options: ['harvest', 'pasture', 'cattle', 'orchard'],
-    correctIndex: 0,
+    options: ['pasture', 'harvest', 'cattle', 'orchard'],
+    correctIndex: 1, // B
     explanation: '"Harvest" means the gathering of crops from farmland.',
   },
   {
@@ -240,8 +240,8 @@ export const ARENA_QUESTIONS: ArenaQuestion[] = [
     type: 'grammar',
     typeLabel: 'Gerunds & Preferences',
     question: 'Choose the correct form: "She enjoys _______ handcrafted pottery in her leisure time."',
-    options: ['making', 'to make', 'made', 'make'],
-    correctIndex: 0,
+    options: ['to make', 'made', 'making', 'make'],
+    correctIndex: 2, // C
     explanation: 'Verbs expressing preferences like "enjoy" take the gerund V-ing ("making").',
   },
   {
@@ -249,8 +249,8 @@ export const ARENA_QUESTIONS: ArenaQuestion[] = [
     type: 'vocab',
     typeLabel: 'B1 Vocabulary',
     question: 'What does the word "nomadic" describe regarding lifestyle?',
-    options: ['Moving from place to place with seasonal herds', 'Urban and industrial', 'Living in modern high-rises', 'Crowded and noisy'],
-    correctIndex: 0,
+    options: ['Urban and industrial', 'Living in modern high-rises', 'Crowded and noisy', 'Moving from place to place with seasonal herds'],
+    correctIndex: 3, // D
     explanation: '"Nomadic" refers to people who move from place to place to find pasture for animals.',
   },
   {
@@ -258,8 +258,8 @@ export const ARENA_QUESTIONS: ArenaQuestion[] = [
     type: 'grammar',
     typeLabel: 'Comparative of Adverbs',
     question: 'Choose the correct comparative: "Tigers run _______ than elephants through dense jungles."',
-    options: ['more swiftly', 'swiftlier', 'swiftly', 'most swiftly'],
-    correctIndex: 0,
+    options: ['swiftlier', 'more swiftly', 'swiftly', 'most swiftly'],
+    correctIndex: 1, // B
     explanation: 'For multi-syllable adverbs ending in -ly, use "more + adverb" ("more swiftly").',
   },
   {
@@ -267,8 +267,8 @@ export const ARENA_QUESTIONS: ArenaQuestion[] = [
     type: 'vocab',
     typeLabel: 'Prehistoric Ecology',
     question: 'What term describes an animal that primarily hunts and feeds on other animals?',
-    options: ['carnivore', 'herbivore', 'omnivore', 'forager'],
-    correctIndex: 0,
+    options: ['herbivore', 'omnivore', 'carnivore', 'forager'],
+    correctIndex: 2, // C
     explanation: '"Carnivore" refers to meat-eating organisms.',
   },
   {
@@ -277,7 +277,7 @@ export const ARENA_QUESTIONS: ArenaQuestion[] = [
     typeLabel: 'Concession Clauses',
     question: 'Complete the sentence: "_______ the dragon was slumbering, its keen ears detected every footstep."',
     options: ['Although', 'Despite', 'Because', 'Since'],
-    correctIndex: 0,
+    correctIndex: 0, // A
     explanation: '"Although" introduces a clause of concession with a full subject and verb.',
   },
   {
@@ -285,8 +285,8 @@ export const ARENA_QUESTIONS: ArenaQuestion[] = [
     type: 'speed',
     typeLabel: 'Fast Vocabulary',
     question: 'Select the synonym for "massive" or "colossal":',
-    options: ['gigantic', 'minute', 'microscopic', 'feeble'],
-    correctIndex: 0,
+    options: ['minute', 'gigantic', 'microscopic', 'feeble'],
+    correctIndex: 1, // B
     explanation: '"Gigantic" means extremely large, synonymous with colossal and massive.',
   },
   {
@@ -294,8 +294,8 @@ export const ARENA_QUESTIONS: ArenaQuestion[] = [
     type: 'grammar',
     typeLabel: 'Modal Verbs of Obligation',
     question: 'Choose the correct modal: "Explorers _______ remain silent to avoid waking the guardian dragon."',
-    options: ['must', 'might', 'could', 'would'],
-    correctIndex: 0,
+    options: ['might', 'could', 'must', 'would'],
+    correctIndex: 2, // C
     explanation: '"Must" expresses strict necessity and urgent obligation.',
   },
   {
@@ -303,8 +303,8 @@ export const ARENA_QUESTIONS: ArenaQuestion[] = [
     type: 'vocab',
     typeLabel: 'B1 Habitat Vocabulary',
     question: 'Which term refers to a vast, flat, treeless Arctic region where the subsoil is permanently frozen?',
-    options: ['tundra', 'canopy', 'plateau', 'oasis'],
-    correctIndex: 0,
+    options: ['canopy', 'plateau', 'oasis', 'tundra'],
+    correctIndex: 3, // D
     explanation: '"Tundra" is the treeless cold biome characterized by permafrost.',
   },
   {
@@ -312,8 +312,8 @@ export const ARENA_QUESTIONS: ArenaQuestion[] = [
     type: 'grammar',
     typeLabel: 'Result Clauses (So... that)',
     question: 'Complete the sentence: "The dragon was _______ powerful that its roar shook the mountain."',
-    options: ['so', 'such', 'very', 'too'],
-    correctIndex: 0,
+    options: ['such', 'so', 'very', 'too'],
+    correctIndex: 1, // B
     explanation: '"So + adjective + that" expresses cause and extreme result.',
   },
   {
@@ -321,8 +321,8 @@ export const ARENA_QUESTIONS: ArenaQuestion[] = [
     type: 'speed',
     typeLabel: 'Synonyms',
     question: 'Select the word that means the opposite of "fragile":',
-    options: ['resilient', 'delicate', 'frail', 'brittle'],
-    correctIndex: 0,
+    options: ['delicate', 'frail', 'resilient', 'brittle'],
+    correctIndex: 2, // C
     explanation: '"Resilient" means strong and able to withstand damage, opposite of fragile.',
   },
   {
@@ -331,10 +331,140 @@ export const ARENA_QUESTIONS: ArenaQuestion[] = [
     typeLabel: 'Reason Clauses',
     question: 'Choose the conjunction: "The infiltration squad stayed silent _______ the dragon had keen hearing."',
     options: ['because', 'although', 'even though', 'despite'],
-    correctIndex: 0,
+    correctIndex: 0, // A
     explanation: '"Because" introduces a clause stating the cause or reason.',
   },
+  {
+    id: 'aq-13',
+    type: 'grammar',
+    typeLabel: 'Conditional Type 1',
+    question: 'Choose the correct form: "If we _______ the voice cipher correctly, the glass cage will unlock."',
+    options: ['chanted', 'chant', 'will chant', 'chants'],
+    correctIndex: 1, // B
+    explanation: 'First Conditional: If + Present Simple, S + will + V-inf.',
+  },
+  {
+    id: 'aq-14',
+    type: 'vocab',
+    typeLabel: 'Teenage Life & Pressure',
+    question: 'What term refers to the feeling of needing to fit in with friends or classmates?',
+    options: ['peer pressure', 'leisure time', 'craft kit', 'nomadic tent'],
+    correctIndex: 0, // A
+    explanation: '"Peer pressure" is the pressure from social peers to conform to behaviors.',
+  },
+  {
+    id: 'aq-15',
+    type: 'grammar',
+    typeLabel: 'Preposition of Fondness',
+    question: 'Complete the collocation: "Dragon Tamers are keen _______ exploring mystical caverns."',
+    options: ['at', 'in', 'with', 'on'],
+    correctIndex: 3, // D
+    explanation: 'The fixed collocation is "keen on + V-ing".',
+  },
+  {
+    id: 'aq-16',
+    type: 'speed',
+    typeLabel: 'Antonyms',
+    question: 'Select the antonym (opposite) of "ancient":',
+    options: ['prehistoric', 'primitive', 'modern', 'medieval'],
+    correctIndex: 2, // C
+    explanation: '"Modern" is the direct opposite of "ancient".',
+  },
+  {
+    id: 'aq-17',
+    type: 'grammar',
+    typeLabel: 'Passive Voice (Grade 10 Focus)',
+    question: 'Choose the passive form: "The sacred dragon egg _______ by ancient spells for centuries."',
+    options: ['was protected', 'has been protected', 'protects', 'is protecting'],
+    correctIndex: 1, // B
+    explanation: 'Present Perfect Passive with "for centuries": "has been protected".',
+  },
+  {
+    id: 'aq-18',
+    type: 'vocab',
+    typeLabel: 'Natural Wonders',
+    question: 'Which word refers to an enormous underground chamber or cave system?',
+    options: ['cavern', 'paddy', 'canal', 'harbor'],
+    correctIndex: 0, // A
+    explanation: 'A "cavern" is a large cave or chamber, typically underground.',
+  },
+  {
+    id: 'aq-19',
+    type: 'grammar',
+    typeLabel: 'Relative Clauses',
+    question: 'Complete the sentence: "The adventurer _______ discovered the dragon lair became a legend."',
+    options: ['which', 'whose', 'who', 'whom'],
+    correctIndex: 2, // C
+    explanation: 'Use relative pronoun "who" for a person acting as the subject of the clause.',
+  },
+  {
+    id: 'aq-20',
+    type: 'speed',
+    typeLabel: 'Vocabulary Precision',
+    question: 'Which word means "having or showing a strong desire for success or achievement"?',
+    options: ['passive', 'timid', 'reluctant', 'ambitious'],
+    correctIndex: 3, // D
+    explanation: '"Ambitious" means determined to achieve success.',
+  },
+  {
+    id: 'aq-21',
+    type: 'grammar',
+    typeLabel: 'Reported Speech',
+    question: 'Choose the correct indirect speech: "He asked me where I _______ during the dragon raid."',
+    options: ['am staying', 'had stayed', 'will stay', 'stay'],
+    correctIndex: 1, // B
+    explanation: 'Backshifting in reported past questions: past simple shifts to past perfect "had stayed".',
+  },
+  {
+    id: 'aq-22',
+    type: 'vocab',
+    typeLabel: 'B1 Collocations',
+    question: 'Choose the correct verb: "Students should _______ balance between study and relaxation."',
+    options: ['strike', 'make', 'do', 'bring'],
+    correctIndex: 0, // A
+    explanation: 'The idiom is "strike a balance" (đạt được sự cân bằng).',
+  },
+  {
+    id: 'aq-23',
+    type: 'grammar',
+    typeLabel: 'Inversion (Đề Chuyên 10)',
+    question: 'Choose the correct form: "Hardly _______ into the nest when the dragon opened its eyes."',
+    options: ['we stepped', 'had we stepped', 'did we step', 'we had stepped'],
+    correctIndex: 1, // B
+    explanation: 'Negative inversion: Hardly + had + S + V3/ed... when...',
+  },
+  {
+    id: 'aq-24',
+    type: 'speed',
+    typeLabel: 'Sound Identification',
+    question: 'Which word has the stress on the SECOND syllable?',
+    options: ['leisure', 'harvest', 'detest', 'nomad'],
+    correctIndex: 2, // C
+    explanation: '"de\'test" has stress on syllable 2, whereas \'leisure, \'harvest, \'nomad are stressed on syllable 1.',
+  },
 ];
+
+/**
+ * Shuffles the options of an Arena question dynamically using Fisher-Yates,
+ * ensuring that the correct answer is uniformly distributed among A, B, C, D (25% each).
+ */
+export function prepareShuffledArenaQuestion(baseQ: ArenaQuestion): ArenaQuestion {
+  const correctOptionText = baseQ.options[baseQ.correctIndex];
+  const shuffledOptions = [...baseQ.options];
+
+  for (let i = shuffledOptions.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffledOptions[i], shuffledOptions[j]] = [shuffledOptions[j], shuffledOptions[i]];
+  }
+
+  const newCorrectIndex = shuffledOptions.indexOf(correctOptionText);
+
+  return {
+    ...baseQ,
+    options: shuffledOptions,
+    correctIndex: newCorrectIndex >= 0 ? newCorrectIndex : 0,
+  };
+}
 
 // Helper to calculate pet stats for battle with Enchantment multiplier
 export function calculatePetStats(pet: { id?: string; name?: string; tierRank: number; rarity: CreatureRarity; enchantmentLevel?: number }) {

@@ -1,5 +1,5 @@
 import React from 'react';
-import { PetCompanion } from '../types';
+import { PetCompanion, PetAppearance } from '../types';
 import { PokemonPetVisual } from './PokemonPetVisual';
 
 export const getElementPetImageUrl = (element?: string) => {
@@ -56,6 +56,7 @@ interface EvolvedPetSpriteProps {
   glowIntensity?: 'normal' | 'high' | 'ultra';
   combatState?: 'idle' | 'attack' | 'hit' | 'spell' | 'victory';
   className?: string;
+  overrideAppearance?: PetAppearance;
 }
 
 // Element color maps for custom divine aura and wing hues
@@ -285,6 +286,7 @@ export const EvolvedPetSprite: React.FC<EvolvedPetSpriteProps> = ({
   glowIntensity = 'normal',
   combatState = 'idle',
   className = '',
+  overrideAppearance,
 }) => {
   if (!pet) {
     return <div className="w-10 h-10 flex items-center justify-center text-xl">🥚</div>;
@@ -444,9 +446,11 @@ export const EvolvedPetSprite: React.FC<EvolvedPetSpriteProps> = ({
           <div className="relative w-full h-full flex items-center justify-center p-1">
             <PokemonPetVisual
               pet={pet}
+              overrideAppearance={overrideAppearance}
               size={size === 'giant' ? 'xl' : size === 'xl' ? 'lg' : size === 'lg' ? 'md' : 'sm'}
               showAura={false}
               showShadow={false}
+              showTitleBadge={false}
               combatState={combatState === 'spell' ? 'special' : combatState}
             />
             <div className="absolute bottom-0.5 right-0.5 text-[10px] bg-slate-950/80 rounded-full px-1 border border-slate-700">

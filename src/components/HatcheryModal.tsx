@@ -2092,7 +2092,9 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
               </button>
 
               <div className="text-center pb-4 border-b border-slate-800">
-                <div className="text-6xl mb-2">{inspectPet.avatarIcon}</div>
+                <div className="flex justify-center mb-3">
+                  <EvolvedPetSprite pet={inspectPet} size="lg" />
+                </div>
                 <div className="flex flex-wrap items-center justify-center gap-1.5 mb-1.5">
                   {(() => {
                     const rarityMeta = getRarityConfig(inspectPet.rarity);
@@ -2224,6 +2226,21 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
                     className="py-2 px-3 bg-amber-950/80 hover:bg-amber-900 border border-amber-500/40 text-amber-200 font-bold text-xs rounded-xl cursor-pointer"
                   >
                     ⚡ Bệ Thờ Tiến Hóa
+                  </button>
+                )}
+                {onOpenAppearanceStudio && (
+                  <button
+                    onClick={() => {
+                      const petId = inspectPet.id;
+                      setInspectPet(null);
+                      onClose();
+                      onOpenAppearanceStudio(petId);
+                    }}
+                    className="py-2 px-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 text-white font-bold text-xs rounded-xl cursor-pointer shadow-md flex items-center justify-center gap-1.5"
+                    title="Mở Studio tùy biến ngoại hình cho pet này"
+                  >
+                    <Palette className="w-3.5 h-3.5 text-indigo-200" />
+                    <span>Ngoại Hình 🎨</span>
                   </button>
                 )}
                 <button

@@ -21,6 +21,7 @@ import {
   ARENA_QUESTIONS,
   ArenaNPC,
   ArenaQuestion,
+  prepareShuffledArenaQuestion,
   calculatePetStats,
   calculateElementMultiplier,
   getElementInfo,
@@ -111,6 +112,10 @@ export const PetArenaModal: React.FC<PetArenaModalProps> = ({
   const [playerCombatState, setPlayerCombatState] = useState<'idle' | 'attack' | 'hit' | 'spell' | 'victory'>('idle');
   const [npcCombatState, setNpcCombatState] = useState<'idle' | 'attack' | 'hit' | 'spell' | 'victory'>('idle');
   const [activeSkillAnim, setActiveSkillAnim] = useState<{ name: string; element: string; color: string } | null>(null);
+
+  // Anti-spam & Question randomization state
+  const [recentQIds, setRecentQIds] = useState<string[]>([]);
+  const [selectedAnswerIndex, setSelectedAnswerIndex] = useState<number | null>(null);
 
   const getElementColor = (el: string) => {
     switch (el?.toLowerCase()) {
@@ -255,6 +260,8 @@ export const PetArenaModal: React.FC<PetArenaModalProps> = ({
     setDivineShieldCharges(shields);
     setNpcHp(npc.petHp);
     setIsPlayerTurn(true);
+    setSelectedAnswerIndex(null);
+    setRecentQIds([]);
 
     const initialLogs = [
       `⚔️ Battle begins! ${npc.name} (${npc.title}) enters the arena with ${npc.petName}!`,
@@ -266,7 +273,7 @@ export const PetArenaModal: React.FC<PetArenaModalProps> = ({
     setBattleState('fighting');
   };
 
-  // Select Player Combat Action (Triggers Academic Question)
+  // Select Player Combat Action (Triggers Academic Question with dynamic option shuffling)
   const handleSelectCombatAction = (type: 'normal' | 'elemental' | 'ultimate') => {
     if (!isPlayerTurn || activeQuestion) return;
 
@@ -277,6 +284,7 @@ export const PetArenaModal: React.FC<PetArenaModalProps> = ({
     setActiveActionType(type);
     setQAnswered(false);
     setQCorrect(false);
+    setSelectedAnswerIndex(null);
 
     // Pick appropriate question based on attack type
     let qPool = ARENA_QUESTIONS;
@@ -286,14 +294,24 @@ export const PetArenaModal: React.FC<PetArenaModalProps> = ({
       qPool = ARENA_QUESTIONS.filter((q) => q.type === 'grammar');
     }
 
-    const randomQ = qPool[Math.floor(Math.random() * qPool.length)] || ARENA_QUESTIONS[0];
-    setActiveQuestion(randomQ);
+    // Filter out recent questions to avoid immediate repetition
+    const unrecentPool = qPool.filter((q) => !recentQIds.includes(q.id));
+    const finalPool = unrecentPool.length > 0 ? unrecentPool : qPool;
+    const baseQ = finalPool[Math.floor(Math.random() * finalPool.length)] || ARENA_QUESTIONS[0];
+
+    // Update recent question IDs history
+    setRecentQIds((prev) => [baseQ.id, ...prev.filter((id) => id !== baseQ.id)].slice(0, 6));
+
+    // CRITICAL: Dynamically shuffle options so Option A is NEVER always the correct answer!
+    const randomizedQ = prepareShuffledArenaQuestion(baseQ);
+    setActiveQuestion(randomizedQ);
   };
 
   // Submit Answer to Battle Question
   const handleAnswerQuestion = (selectedIndex: number) => {
     if (!activeQuestion || qAnswered) return;
 
+    setSelectedAnswerIndex(selectedIndex);
     setQAnswered(true);
     const isRight = selectedIndex === activeQuestion.correctIndex;
     setQCorrect(isRight);
@@ -308,7 +326,8 @@ export const PetArenaModal: React.FC<PetArenaModalProps> = ({
       executePlayerAttack(isRight);
       setActiveQuestion(null);
       setActiveActionType(null);
-    }, 1200);
+      setSelectedAnswerIndex(null);
+    }, 1500);
   };
 
   // Execute Player Damage with Companion Skill
@@ -336,11 +355,13 @@ export const PetArenaModal: React.FC<PetArenaModalProps> = ({
     multiplier *= elemCheck.multiplier;
 
     if (!isRight) {
-      multiplier *= 0.4; // penalty for incorrect answer
+      // ANTI-SPAM: Incorrect answers severely penalty damage (glancing blow) and grant ZERO rage!
+      multiplier *= 0.15;
+      rageGain = activeActionType === 'ultimate' ? -50 : 0;
     }
 
     const rawDmg = Math.round((playerBaseStats.atk * multiplier) - (selectedNPC.petDef * 0.4));
-    const damage = Math.max(14, rawDmg);
+    const damage = Math.max(isRight ? 14 : 2, rawDmg);
 
     setIsShaking(true);
     setPlayerCombatState(skill.type === 'ultimate' ? 'spell' : 'attack');
@@ -361,9 +382,12 @@ export const PetArenaModal: React.FC<PetArenaModalProps> = ({
     setNpcHp(nextNpcHp);
     setPlayerRage((prev) => Math.min(100, Math.max(0, prev + rageGain)));
 
-    const hitDesc = isRight ? '🔥 CRITICAL HIT!' : '⚠️ Incorrect answer (Reduced Damage)';
+    const hitDesc = isRight
+      ? '🔥 CRITICAL HIT!'
+      : '⚠️ Trả lời SAI! Đòn đánh bị hụt (Glancing Hit), 0 Nộ';
+
     setBattleLogs((prev) => [
-      `⚡ ${activePet.name} unleashed [${skill.name}] (${skill.element.toUpperCase()}) dealing ${damage} DMG to ${selectedNPC.petName}! [${elemCheck.label}] (${hitDesc})`,
+      `⚡ ${activePet.name} used [${skill.name}] (${skill.element.toUpperCase()}) dealing ${damage} DMG to ${selectedNPC.petName}! [${elemCheck.label}] (${hitDesc})`,
       ...prev.slice(0, 5),
     ]);
 
@@ -971,18 +995,21 @@ export const PetArenaModal: React.FC<PetArenaModalProps> = ({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {activeQuestion.options.map((opt, idx) => {
-                    let optStyle = 'bg-slate-900 border-slate-800 text-slate-200 hover:border-amber-400';
+                    let optStyle = 'bg-slate-900 border-slate-800 text-slate-200 hover:border-amber-400 hover:bg-slate-850';
                     if (qAnswered) {
                       if (idx === activeQuestion.correctIndex) {
-                        optStyle = 'bg-emerald-950 border-emerald-500 text-emerald-200 font-bold';
+                        optStyle = 'bg-emerald-950/90 border-emerald-500 text-emerald-100 font-bold ring-2 ring-emerald-400/80 shadow-lg shadow-emerald-950/50';
+                      } else if (idx === selectedAnswerIndex) {
+                        optStyle = 'bg-rose-950/90 border-rose-500 text-rose-200 font-bold line-through ring-2 ring-rose-500/50';
                       } else {
-                        optStyle = 'bg-slate-900/50 border-slate-800 text-slate-500 opacity-60';
+                        optStyle = 'bg-slate-900/40 border-slate-800 text-slate-500 opacity-40';
                       }
                     }
 
                     return (
                       <button
                         key={idx}
+                        id={`arena-opt-${String.fromCharCode(65 + idx).toLowerCase()}`}
                         onClick={() => handleAnswerQuestion(idx)}
                         onTouchStart={(e) => {
                           e.stopPropagation();
@@ -997,6 +1024,23 @@ export const PetArenaModal: React.FC<PetArenaModalProps> = ({
                     );
                   })}
                 </div>
+
+                {/* Explanation feedback shown upon answering */}
+                {qAnswered && (
+                  <div className={`mt-2.5 p-2.5 rounded-xl text-xs border animate-fadeIn flex items-start gap-2 ${
+                    qCorrect
+                      ? 'bg-emerald-950/80 border-emerald-500/60 text-emerald-200'
+                      : 'bg-rose-950/80 border-rose-500/60 text-rose-200'
+                  }`}>
+                    <span className="text-sm shrink-0">{qCorrect ? '🎯' : '❌'}</span>
+                    <div>
+                      <span className="font-bold mr-1">
+                        {qCorrect ? 'Chính xác! (+Sát thương tối đa & Nộ)' : 'Sai rồi! (Hụt đòn & 0 Nộ khí):'}
+                      </span>
+                      <span>{activeQuestion.explanation}</span>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

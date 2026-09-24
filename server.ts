@@ -34,25 +34,40 @@ function withTimeout<T>(promise: Promise<T>, ms: number, timeoutMsg: string): Pr
   ]);
 }
 
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function callGeminiWithFallback(ai: GoogleGenAI, requestConfig: any, timeoutMs = 30000) {
-  const candidateModels = ['gemini-flash-latest', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'];
+  // gemini-3.8-flash is the primary environment model, followed by gemini-3.1-flash-lite
+  const candidateModels = ['gemini-3.8-flash', 'gemini-3.1-flash-lite', 'gemini-flash-latest'];
   let lastErr: any = null;
 
   for (const model of candidateModels) {
-    try {
-      const resp = await withTimeout(
-        ai.models.generateContent({
-          ...requestConfig,
-          model,
-        }),
-        timeoutMs,
-        `Timeout waiting for ${model}`
-      );
-      return resp;
-    } catch (err: any) {
-      lastErr = err;
-      const statusCode = err?.status || err?.code || '';
-      console.warn(`[Gemini Fallback] Model ${model} failed/timed-out (${statusCode || err?.message}). Trying alternative...`);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const resp = await withTimeout(
+          ai.models.generateContent({
+            ...requestConfig,
+            model,
+          }),
+          timeoutMs,
+          `Request timeout for ${model}`
+        );
+        return resp;
+      } catch (err: any) {
+        lastErr = err;
+        const statusCode = err?.status || err?.code || '';
+        const isTransient = statusCode === 503 || statusCode === 429 || statusCode === '503' || statusCode === '429';
+
+        if (isTransient && attempt === 0) {
+          await delay(600);
+          continue;
+        }
+
+        console.log(`[Gemini Service] Model candidate ${model} unavailable (${statusCode || err?.message || 'status'}), evaluating alternative...`);
+        break;
+      }
     }
   }
 

@@ -110,31 +110,57 @@ export type CreatureClassification = 'living' | 'extinct' | 'mythical' | 'divine
 
 export type PetArchetype =
   | 'dragon'
+  | 'ancient_dragon'
   | 'wolf'
   | 'phoenix'
+  | 'shadow_phoenix'
   | 'tiger'
+  | 'divine_lion'
   | 'serpent'
+  | 'leviathan'
   | 'kitsune'
   | 'turtle'
+  | 'pegasus'
+  | 'behemoth'
   | 'mecha'
   | 'celestial';
 
-export type PetPattern = 'none' | 'stripes' | 'runes' | 'scales' | 'stars';
+export type PetPattern =
+  | 'none'
+  | 'stripes'
+  | 'runes'
+  | 'scales'
+  | 'stars'
+  | 'lightning_circuit'
+  | 'cosmic_nebula'
+  | 'divine_crest'
+  | 'tiger_stripes_gold';
+
 export type PetHeadAccessory =
   | 'none'
   | 'crown'
+  | 'dragon_horns'
   | 'horns'
+  | 'valkyrie_helm'
+  | 'pharaoh_crown'
+  | 'cyber_headset'
+  | 'cyber_visor'
   | 'ninja_band'
   | 'wizard_hat'
-  | 'cyber_visor'
+  | 'fox_mask'
   | 'halo'
+  | 'flame_tiara'
   | 'flower_wreath';
 
 export type PetBackWing =
   | 'none'
   | 'dragon_wings'
+  | 'phoenix_flame_wings'
   | 'angel_feathers'
+  | 'void_shadow_cape'
+  | 'celestial_mech_thrusters'
   | 'energy_blades'
+  | 'butterfly_prism_wings'
   | 'fairy_wings';
 
 export type PetAuraEffect =
@@ -144,7 +170,23 @@ export type PetAuraEffect =
   | 'sparks'
   | 'void'
   | 'starlight'
+  | 'supernova'
+  | 'divine_matrix'
+  | 'ice_crystals'
+  | 'dark_matter'
   | 'nature_leaves';
+
+export type PetParticleStyle =
+  | 'none'
+  | 'sparks'
+  | 'feathers'
+  | 'petals'
+  | 'stars'
+  | 'lightning'
+  | 'bubbles'
+  | 'embers';
+
+export type PetAuraIntensity = 'subtle' | 'radiant' | 'hyper' | 'godlike';
 
 export interface PetAppearance {
   archetype: PetArchetype;
@@ -155,6 +197,11 @@ export interface PetAppearance {
   backWing?: PetBackWing;
   auraEffect?: PetAuraEffect;
   customSkinName?: string;
+  // Enhanced Appearance Upgrades
+  eyeGlowColor?: string; // Eye iris color with glow filter
+  auraIntensity?: PetAuraIntensity; // Visual radiance power
+  particleStyle?: PetParticleStyle; // Floating particle atmospheric effects
+  costumeTitle?: string; // Floating mythical title badge
 }
 
 export interface PokemonBattleMove {
