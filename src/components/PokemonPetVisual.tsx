@@ -9,7 +9,10 @@ import {
   PetAuraEffect,
   PetParticleStyle,
   PetAuraIntensity,
+  PetVisualMode,
 } from '../types';
+import { getArtworkForPet } from '../utils/petArtworks';
+import { IsolatedPetImage } from './IsolatedPetImage';
 
 interface PokemonPetVisualProps {
   pet: PetCompanion;
@@ -159,6 +162,7 @@ export const getDefaultAppearance = (pet: PetCompanion): PetAppearance => {
     auraIntensity,
     particleStyle: isHighTier ? particleStyle : 'none',
     costumeTitle: isHighTier ? `Linh Thú ${pet.name}` : undefined,
+    visualMode: '3d_art',
   };
 };
 
@@ -187,8 +191,13 @@ const PokemonPetVisualComponent: React.FC<PokemonPetVisualProps> = ({
   else if (size === 'battle-front') boxPx = 200;
   else if (size === 'battle-back') boxPx = 220;
 
-  // Combat animation classes
+  // Combat animation classes & Custom idle animation
   let animClass = 'animate-pet-breathe';
+  if (app.idleAnimation === 'float') animClass = 'animate-pet-float';
+  else if (app.idleAnimation === 'bounce') animClass = 'animate-pet-bounce-happy';
+  else if (app.idleAnimation === 'flapping') animClass = 'animate-pet-flapping';
+  else if (app.idleAnimation === 'hyper_pulse') animClass = 'animate-pet-hyper-pulse';
+
   if (combatState === 'attack') animClass = facing === 'back' ? 'attackLunge animate-lunge-back' : 'attackLunge attackLungeOpponent animate-lunge-front';
   else if (combatState === 'hit') animClass = 'hitFlash animate-hit-shake';
   else if (combatState === 'special') animClass = facing === 'back' ? 'attackLunge animate-lunge-back scale-110' : 'attackLunge attackLungeOpponent animate-lunge-front scale-110';
@@ -315,11 +324,48 @@ const PokemonPetVisualComponent: React.FC<PokemonPetVisualProps> = ({
         </div>
       )}
 
+      {showAura && app.auraEffect === 'rainbow_chakra' && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none -z-10 animate-spin" style={{ animationDuration: '8s' }}>
+          <div className="w-[145%] h-[145%] rounded-full border-2 border-transparent bg-gradient-to-r from-red-500 via-amber-400 via-emerald-400 via-cyan-400 to-purple-500 opacity-70 blur-[3px]" />
+          <div className="absolute -top-3 text-xs">🌈</div>
+          <div className="absolute -bottom-3 text-xs">☸️</div>
+        </div>
+      )}
+
+      {showAura && app.auraEffect === 'plasma_storm' && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none -z-10 animate-spin" style={{ animationDuration: '5s' }}>
+          <div className="w-[150%] h-[150%] rounded-full border-2 border-dashed border-cyan-400 shadow-[0_0_20px_#22d3ee] animate-pulse" />
+          <div className="absolute -top-2 left-1 text-xs">⚡</div>
+          <div className="absolute -bottom-2 right-1 text-xs">🌀</div>
+        </div>
+      )}
+
       {/* --- 4. ATMOSPHERIC FLOATING PARTICLES --- */}
       {app.particleStyle === 'petals' && (
         <div className="absolute inset-0 pointer-events-none -z-10 overflow-visible">
           <div className="absolute top-0 left-1 text-[11px] animate-bounce opacity-80">🌸</div>
           <div className="absolute bottom-1 right-2 text-[9px] animate-pulse opacity-70">🌺</div>
+        </div>
+      )}
+      {app.particleStyle === 'sakura_blossom' && (
+        <div className="absolute inset-0 pointer-events-none -z-10 overflow-visible">
+          <div className="absolute -top-3 left-3 text-[12px] animate-bounce opacity-90">🌸</div>
+          <div className="absolute bottom-0 right-1 text-[10px] animate-pulse opacity-80">💮</div>
+          <div className="absolute top-3 -right-2 text-[11px] animate-ping opacity-70">🌸</div>
+        </div>
+      )}
+      {app.particleStyle === 'golden_coins' && (
+        <div className="absolute inset-0 pointer-events-none -z-10 overflow-visible">
+          <div className="absolute -top-3 right-1 text-[12px] animate-bounce opacity-95">🪙</div>
+          <div className="absolute bottom-1 left-0 text-[10px] animate-pulse opacity-85">💰</div>
+          <div className="absolute top-2 -left-2 text-[9px] animate-ping opacity-75">✨</div>
+        </div>
+      )}
+      {app.particleStyle === 'ancient_glyphs' && (
+        <div className="absolute inset-0 pointer-events-none -z-10 overflow-visible">
+          <div className="absolute -top-3 left-1 text-[11px] font-mono text-cyan-300 animate-ping opacity-90">ᚱ</div>
+          <div className="absolute bottom-0 right-2 text-[12px] font-mono text-amber-300 animate-pulse opacity-85">ᛟ</div>
+          <div className="absolute top-3 -right-2 text-[10px] font-mono text-purple-300 animate-bounce opacity-80">ᛋ</div>
         </div>
       )}
       {app.particleStyle === 'feathers' && (
@@ -354,13 +400,62 @@ const PokemonPetVisualComponent: React.FC<PokemonPetVisualProps> = ({
         </div>
       )}
 
-      {/* --- 5. MAIN SVG CREATURE GRAPHIC --- */}
-      <svg
-        viewBox="0 0 200 200"
-        className="w-full h-full drop-shadow-xl overflow-visible"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-      >
+      {/* --- 5. CREATURE GRAPHIC: ISOLATED PET MASCOT (NO PHOTO FRAMES/BORDERS) OR VECTOR MODE --- */}
+      {app.visualMode !== 'vector' ? (
+        <div
+          className="relative flex items-center justify-center transition-all duration-500 overflow-visible group"
+          style={{
+            width: `${boxPx}px`,
+            height: `${boxPx}px`,
+            transform: facing === 'back' ? 'scaleX(-1) brightness(0.85)' : undefined,
+          }}
+        >
+          {/* Pure Isolated Creature Sprite (Zero frame, background removed) */}
+          <IsolatedPetImage
+            src={getArtworkForPet(app.archetype, app.customArtworkUrl, pet.imageUrl)}
+            alt={pet.name}
+            boxSize={boxPx}
+            primaryColor={app.primaryColor}
+            secondaryColor={app.secondaryColor}
+          />
+
+          {/* Floating Head Accessory (No frame, naturally resting on head) */}
+          {app.headAccessory && app.headAccessory !== 'none' && (
+            <div className="absolute -top-3 left-1/2 -translate-x-1/2 text-base sm:text-lg drop-shadow-[0_0_10px_rgba(255,255,255,0.95)] pointer-events-none z-20 animate-bounce">
+              {app.headAccessory === 'crown' && '👑'}
+              {app.headAccessory === 'dragon_horns' && '🐉'}
+              {app.headAccessory === 'halo' && '💫'}
+              {app.headAccessory === 'pharaoh_crown' && '✨'}
+              {app.headAccessory === 'warlord_helm' && '🪖'}
+              {app.headAccessory === 'astral_circlet' && '💍'}
+              {app.headAccessory === 'flame_tiara' && '🔥'}
+              {app.headAccessory === 'flower_wreath' && '🌸'}
+              {app.headAccessory === 'fox_mask' && '🎭'}
+              {app.headAccessory === 'wizard_hat' && '🧙'}
+              {app.headAccessory === 'ninja_band' && '🥷'}
+            </div>
+          )}
+
+          {/* Floating Held Artifact Companion (No box, floating beside pet) */}
+          {app.heldArtifact && app.heldArtifact !== 'none' && (
+            <div className="absolute -bottom-1 -right-2 p-1.5 bg-slate-950/90 rounded-full border border-amber-400 shadow-xl pointer-events-none z-20 animate-float text-sm sm:text-base">
+              {app.heldArtifact === 'divine_sword' && '🗡️'}
+              {app.heldArtifact === 'dragon_pearl' && '🔮'}
+              {app.heldArtifact === 'orb_of_elements' && '🪐'}
+              {app.heldArtifact === 'holy_shield' && '🛡️'}
+              {app.heldArtifact === 'thunder_hammer' && '🔨'}
+              {app.heldArtifact === 'magic_staff' && '🪄'}
+            </div>
+          )}
+        </div>
+      ) : (
+        /* --- 5. VECTOR SVG CREATURE GRAPHIC --- */
+        <svg
+          viewBox="0 0 200 200"
+          className="w-full h-full drop-shadow-xl overflow-visible"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
         <defs>
           <linearGradient id={`${gradId}-body`} x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stopColor={app.secondaryColor} />
@@ -501,6 +596,24 @@ const PokemonPetVisualComponent: React.FC<PokemonPetVisualProps> = ({
           </g>
         )}
 
+        {app.backWing === 'golden_rings_wing' && (
+          <g filter={`url(#${gradId}-glow)`}>
+            <circle cx="50" cy="85" r="28" fill="none" stroke="#facc15" strokeWidth="3" strokeDasharray="6 3" className="animate-spin" style={{ animationDuration: '8s' }} />
+            <circle cx="150" cy="85" r="28" fill="none" stroke="#facc15" strokeWidth="3" strokeDasharray="6 3" className="animate-spin" style={{ animationDuration: '8s' }} />
+            <circle cx="50" cy="85" r="16" fill="none" stroke="#f59e0b" strokeWidth="2" />
+            <circle cx="150" cy="85" r="16" fill="none" stroke="#f59e0b" strokeWidth="2" />
+          </g>
+        )}
+
+        {app.backWing === 'cosmic_nebula_wings' && (
+          <g opacity="0.9" className="animate-wing-flap">
+            <path d="M100 90 C50 20 5 10 10 70 C15 110 75 115 100 100 Z" fill="#4c1d95" stroke="#c084fc" strokeWidth="2.5" filter={`url(#${gradId}-glow)`} />
+            <path d="M100 90 C150 20 195 10 190 70 C185 110 125 115 100 100 Z" fill="#4c1d95" stroke="#c084fc" strokeWidth="2.5" filter={`url(#${gradId}-glow)`} />
+            <circle cx="50" cy="60" r="3" fill="#f472b6" filter={`url(#${gradId}-glow)`} />
+            <circle cx="150" cy="60" r="3" fill="#f472b6" filter={`url(#${gradId}-glow)`} />
+          </g>
+        )}
+
         {/* --- TAIL / REAR DETAILS --- */}
         {facing === 'front' ? (
           /* Front view: Tail curling from side */
@@ -607,6 +720,22 @@ const PokemonPetVisualComponent: React.FC<PokemonPetVisualProps> = ({
           <g fill="none" stroke="#ffffff" strokeWidth="1.5" opacity="0.4">
             <path d="M90 125 C95 130 105 130 110 125" />
             <path d="M85 135 C92 142 108 142 115 135" />
+          </g>
+        )}
+
+        {app.pattern === 'sacred_lotus' && (
+          <g filter={`url(#${gradId}-glow)`}>
+            <path d="M100 125 C92 135 94 148 100 152 C106 148 108 135 100 125 Z" fill="#f472b6" opacity="0.9" />
+            <path d="M94 135 C82 140 85 150 94 150 C98 145 98 138 94 135 Z" fill="#ec4899" opacity="0.8" />
+            <path d="M106 135 C118 140 115 150 106 150 C102 145 102 138 106 135 Z" fill="#ec4899" opacity="0.8" />
+          </g>
+        )}
+
+        {app.pattern === 'dragon_scale_armor' && (
+          <g stroke="#f59e0b" strokeWidth="1.5" fill="none" opacity="0.85" filter={`url(#${gradId}-glow)`}>
+            <polygon points="100,122 106,128 100,134 94,128" />
+            <polygon points="90,132 96,138 90,144 84,138" />
+            <polygon points="110,132 116,138 110,144 104,138" />
           </g>
         )}
 
@@ -723,6 +852,23 @@ const PokemonPetVisualComponent: React.FC<PokemonPetVisualProps> = ({
 
         {(app.archetype === 'turtle' || app.archetype === 'serpent' || app.archetype === 'mecha' || app.archetype === 'celestial') && (
           <ellipse cx="100" cy="65" rx="35" ry="30" fill={`url(#${gradId}-body)`} stroke="#0f172a" strokeWidth="3" />
+        )}
+
+        {app.archetype === 'void_fiend' && (
+          <g>
+            {/* Dark Demonic curved horns */}
+            <path d="M70 50 C50 15 35 25 38 40 C45 45 60 52 70 50 Z" fill="#4c1d95" stroke="#7e22ce" strokeWidth="2" />
+            <path d="M130 50 C150 15 165 25 162 40 C155 45 140 52 130 50 Z" fill="#4c1d95" stroke="#7e22ce" strokeWidth="2" />
+            <ellipse cx="100" cy="65" rx="36" ry="32" fill={`url(#${gradId}-body)`} stroke="#0f172a" strokeWidth="3" />
+          </g>
+        )}
+
+        {app.archetype === 'crystal_golem' && (
+          <g>
+            {/* Angular gemstone head plates */}
+            <polygon points="100,28 135,48 128,88 72,88 65,48" fill={`url(#${gradId}-body)`} stroke="#0284c7" strokeWidth="3" />
+            <polygon points="100,32 120,48 100,60 80,48" fill="#bae6fd" opacity="0.6" />
+          </g>
         )}
 
         {/* --- FRONT-VIEW FACE & CUSTOM EYE GLOW --- */}
@@ -873,7 +1019,76 @@ const PokemonPetVisualComponent: React.FC<PokemonPetVisualProps> = ({
             <circle cx="120" cy="42" r="4" fill="#38bdf8" />
           </g>
         )}
+
+        {app.headAccessory === 'warlord_helm' && (
+          <g filter={`url(#${gradId}-glow)`}>
+            {/* Heavy Spiked Warlord Crest */}
+            <path d="M65 42 L100 15 L135 42 L100 30 Z" fill="#991b1b" stroke="#facc15" strokeWidth="2" />
+            <circle cx="100" cy="24" r="3" fill="#fef08a" />
+          </g>
+        )}
+
+        {app.headAccessory === 'astral_circlet' && (
+          <g filter={`url(#${gradId}-glow)`}>
+            <ellipse cx="100" cy="38" rx="34" ry="8" fill="none" stroke="#38bdf8" strokeWidth="2" />
+            <polygon points="100,24 105,32 100,40 95,32" fill="#67e8f9" />
+          </g>
+        )}
+
+        {/* --- 6. HELD ARTIFACT / MAGICAL WEAPON --- */}
+        {app.heldArtifact === 'divine_sword' && (
+          <g transform="translate(145, 75) rotate(15)" className="animate-bounce" filter={`url(#${gradId}-glow)`}>
+            {/* Golden Holy Sword Blade */}
+            <polygon points="10,0 14,8 12,45 8,45 6,8" fill="#fef08a" stroke="#ca8a04" strokeWidth="1.5" />
+            <rect x="2" y="45" width="16" height="4" rx="2" fill="#ca8a04" />
+            <rect x="8" y="49" width="4" height="12" fill="#78350f" />
+            <circle cx="10" cy="63" r="3" fill="#facc15" />
+          </g>
+        )}
+
+        {app.heldArtifact === 'orb_of_elements' && (
+          <g transform="translate(148, 85)" className="animate-spin" style={{ animationDuration: '6s' }} filter={`url(#${gradId}-glow)`}>
+            <circle cx="10" cy="10" r="14" fill="#06b6d4" stroke="#ffffff" strokeWidth="2" opacity="0.85" />
+            <circle cx="10" cy="10" r="8" fill="#a855f7" opacity="0.8" />
+          </g>
+        )}
+
+        {app.heldArtifact === 'magic_staff' && (
+          <g transform="translate(142, 65) rotate(-10)" className="animate-pulse" filter={`url(#${gradId}-glow)`}>
+            <rect x="8" y="25" width="4" height="60" rx="2" fill="#92400e" stroke="#78350f" strokeWidth="1" />
+            <circle cx="10" cy="18" r="12" fill="#ec4899" stroke="#fbcfe8" strokeWidth="2" />
+            <polygon points="10,8 14,18 10,24 6,18" fill="#ffffff" />
+          </g>
+        )}
+
+        {app.heldArtifact === 'dragon_pearl' && (
+          <g transform="translate(146, 85)" className="animate-pulse" filter={`url(#${gradId}-glow)`}>
+            <circle cx="10" cy="10" r="13" fill="#fef08a" stroke="#f59e0b" strokeWidth="2.5" />
+            <circle cx="6" cy="6" r="4" fill="#ffffff" opacity="0.9" />
+          </g>
+        )}
+
+        {app.heldArtifact === 'thunder_hammer' && (
+          <g transform="translate(142, 75) rotate(20)" filter={`url(#${gradId}-glow)`}>
+            <rect x="8" y="30" width="5" height="40" rx="2" fill="#475569" stroke="#0f172a" strokeWidth="1" />
+            <rect x="-4" y="10" width="28" height="20" rx="3" fill="#38bdf8" stroke="#ffffff" strokeWidth="1.5" />
+            <polygon points="10,12 14,20 10,28 6,20" fill="#facc15" />
+          </g>
+        )}
+
+        {app.heldArtifact === 'holy_shield' && (
+          <g transform="translate(142, 85)" className="animate-pulse" filter={`url(#${gradId}-glow)`}>
+            <path d="M0 0 L24 0 C24 16 12 30 12 30 C12 30 0 16 0 0 Z" fill="#eab308" stroke="#ca8a04" strokeWidth="2" />
+            <polygon points="12,5 15,12 12,20 9,12" fill="#ffffff" />
+          </g>
+        )}
       </svg>
+      )}
+
+      {/* --- 7. SHINY SHIMMER OVERLAY --- */}
+      {app.shinyShimmer && (
+        <div className="absolute inset-0 rounded-full animate-shiny-shimmer pointer-events-none z-20" />
+      )}
     </div>
   );
 };

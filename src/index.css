@@ -572,4 +572,93 @@
   animation: celestialAuraPulse 2.4s ease-in-out infinite;
 }
 
+/* --- PET MOTION IDLE ANIMATIONS --- */
+@keyframes petFloatAir {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  25% {
+    transform: translateY(-9px) rotate(-1.5deg);
+  }
+  75% {
+    transform: translateY(-4px) rotate(1.5deg);
+  }
+}
+
+@keyframes petBounceHappy {
+  0%, 100% {
+    transform: translateY(0) scaleY(1) scaleX(1);
+  }
+  30% {
+    transform: translateY(-12px) scaleY(1.08) scaleX(0.94);
+  }
+  50% {
+    transform: translateY(0) scaleY(0.9) scaleX(1.1);
+  }
+  65% {
+    transform: translateY(-4px) scaleY(1.02) scaleX(0.98);
+  }
+}
+
+@keyframes petWingFlappingMotion {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-10px) scale(1.03);
+  }
+}
+
+@keyframes petHyperPulse {
+  0%, 100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 10px rgba(250, 204, 21, 0.4));
+  }
+  50% {
+    transform: scale(1.06);
+    filter: drop-shadow(0 0 25px rgba(239, 68, 68, 0.8)) drop-shadow(0 0 40px rgba(168, 85, 247, 0.8));
+  }
+}
+
+@keyframes shinyShimmerSweep {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-pet-float {
+  animation: petFloatAir 3.2s ease-in-out infinite;
+}
+
+.animate-pet-bounce-happy {
+  animation: petBounceHappy 1.8s cubic-bezier(0.28, 0.84, 0.42, 1) infinite;
+}
+
+.animate-pet-flapping {
+  animation: petWingFlappingMotion 1.5s ease-in-out infinite;
+}
+
+.animate-pet-hyper-pulse {
+  animation: petHyperPulse 1.4s ease-in-out infinite;
+}
+
+.animate-shiny-shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.4) 30%,
+    rgba(250, 204, 21, 0.8) 50%,
+    rgba(168, 85, 247, 0.4) 70%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: shinyShimmerSweep 3s linear infinite;
+  mix-blend-mode: overlay;
+  pointer-events: none;
+}
+
+
 

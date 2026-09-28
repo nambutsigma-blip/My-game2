@@ -123,7 +123,9 @@ export type PetArchetype =
   | 'pegasus'
   | 'behemoth'
   | 'mecha'
-  | 'celestial';
+  | 'celestial'
+  | 'void_fiend'
+  | 'crystal_golem';
 
 export type PetPattern =
   | 'none'
@@ -134,7 +136,9 @@ export type PetPattern =
   | 'lightning_circuit'
   | 'cosmic_nebula'
   | 'divine_crest'
-  | 'tiger_stripes_gold';
+  | 'tiger_stripes_gold'
+  | 'sacred_lotus'
+  | 'dragon_scale_armor';
 
 export type PetHeadAccessory =
   | 'none'
@@ -150,7 +154,9 @@ export type PetHeadAccessory =
   | 'fox_mask'
   | 'halo'
   | 'flame_tiara'
-  | 'flower_wreath';
+  | 'flower_wreath'
+  | 'warlord_helm'
+  | 'astral_circlet';
 
 export type PetBackWing =
   | 'none'
@@ -161,7 +167,9 @@ export type PetBackWing =
   | 'celestial_mech_thrusters'
   | 'energy_blades'
   | 'butterfly_prism_wings'
-  | 'fairy_wings';
+  | 'fairy_wings'
+  | 'golden_rings_wing'
+  | 'cosmic_nebula_wings';
 
 export type PetAuraEffect =
   | 'none'
@@ -174,7 +182,9 @@ export type PetAuraEffect =
   | 'divine_matrix'
   | 'ice_crystals'
   | 'dark_matter'
-  | 'nature_leaves';
+  | 'nature_leaves'
+  | 'rainbow_chakra'
+  | 'plasma_storm';
 
 export type PetParticleStyle =
   | 'none'
@@ -184,9 +194,25 @@ export type PetParticleStyle =
   | 'stars'
   | 'lightning'
   | 'bubbles'
-  | 'embers';
+  | 'embers'
+  | 'golden_coins'
+  | 'sakura_blossom'
+  | 'ancient_glyphs';
 
 export type PetAuraIntensity = 'subtle' | 'radiant' | 'hyper' | 'godlike';
+
+export type PetHeldArtifact =
+  | 'none'
+  | 'divine_sword' // Thánh Kiếm Hoàng Kim
+  | 'orb_of_elements' // Ngọc Nguyên Tố
+  | 'magic_staff' // Quyền Trượng Ma Pháp
+  | 'dragon_pearl' // Thần Châu Long Tộc
+  | 'thunder_hammer' // Búa Sét Thần
+  | 'holy_shield'; // Khiên Thánh Quang
+
+export type PetIdleAnimation = 'breathe' | 'float' | 'bounce' | 'flapping' | 'hyper_pulse';
+
+export type PetVisualMode = '3d_art' | 'vector';
 
 export interface PetAppearance {
   archetype: PetArchetype;
@@ -202,6 +228,12 @@ export interface PetAppearance {
   auraIntensity?: PetAuraIntensity; // Visual radiance power
   particleStyle?: PetParticleStyle; // Floating particle atmospheric effects
   costumeTitle?: string; // Floating mythical title badge
+  // 3.0 Ultra Upgrades
+  heldArtifact?: PetHeldArtifact; // Floating magical weapon/artifact next to pet
+  idleAnimation?: PetIdleAnimation; // Custom animation motion (float, breathe, bounce, etc.)
+  shinyShimmer?: boolean; // Ultra rare shiny iridescent metallic overlay
+  visualMode?: PetVisualMode; // '3d_art' for Ultra-HD CGI Fantasy Creature or 'vector' for SVG
+  customArtworkUrl?: string; // High-res creature portrait / artwork
 }
 
 export interface PokemonBattleMove {

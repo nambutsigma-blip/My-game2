@@ -16,6 +16,9 @@ import {
   Feather,
   Sun,
   Wand2,
+  Sword,
+  Activity,
+  Image as ImageIcon,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import {
@@ -28,9 +31,13 @@ import {
   PetAuraEffect,
   PetParticleStyle,
   PetAuraIntensity,
+  PetHeldArtifact,
+  PetIdleAnimation,
+  PetVisualMode,
 } from '../types';
 import { PokemonPetVisual, getDefaultAppearance } from './PokemonPetVisual';
 import { playSuccessChime, playEnchantSound, playEggHatch } from '../utils/soundEffects';
+import { CREATURE_ARTWORK_GALLERY, CreatureArtworkPreset } from '../utils/petArtworks';
 
 interface PetAppearanceStudioModalProps {
   isOpen: boolean;
@@ -220,6 +227,94 @@ const MYTHIC_SKIN_SETS: {
       costumeTitle: 'Thiên Mã Thánh Sứ',
     },
   },
+  {
+    id: 'void_fiend_sovereign',
+    name: 'Ma Thần Vực Thẳm',
+    icon: '😈',
+    desc: 'Ác ma hư không cầm thánh kiếm hoàng kim với vòng hào quang 7 sắc cầu vồng',
+    appearance: {
+      archetype: 'void_fiend',
+      primaryColor: '#3b0764',
+      secondaryColor: '#9333ea',
+      eyeGlowColor: '#f43f5e',
+      pattern: 'dragon_scale_armor',
+      headAccessory: 'warlord_helm',
+      backWing: 'void_shadow_cape',
+      auraEffect: 'rainbow_chakra',
+      auraIntensity: 'godlike',
+      particleStyle: 'ancient_glyphs',
+      heldArtifact: 'divine_sword',
+      idleAnimation: 'float',
+      shinyShimmer: true,
+      costumeTitle: 'Ma Vương Vực Thẳm',
+    },
+  },
+  {
+    id: 'crystal_titan_golem',
+    name: 'Thạch Cự Thần Pha Lê',
+    icon: '💎',
+    desc: 'Khổng thần pha lê thái cổ hộ vệ khiên thánh quang và bão plasma sấm sét',
+    appearance: {
+      archetype: 'crystal_golem',
+      primaryColor: '#0284c7',
+      secondaryColor: '#38bdf8',
+      eyeGlowColor: '#a5f3fc',
+      pattern: 'sacred_lotus',
+      headAccessory: 'astral_circlet',
+      backWing: 'golden_rings_wing',
+      auraEffect: 'plasma_storm',
+      auraIntensity: 'hyper',
+      particleStyle: 'stars',
+      heldArtifact: 'holy_shield',
+      idleAnimation: 'bounce',
+      shinyShimmer: true,
+      costumeTitle: 'Thần Vệ Pha Lê',
+    },
+  },
+  {
+    id: 'dragon_god_sovereign_orb',
+    name: 'Thần Long Châu Cực Phẩm',
+    icon: '🔮',
+    desc: 'Long vương viễn cổ ngậm thần châu long tộc, rực sáng lấp lánh và hào quang cực đại',
+    appearance: {
+      archetype: 'ancient_dragon',
+      primaryColor: '#b45309',
+      secondaryColor: '#fbbf24',
+      eyeGlowColor: '#ffffff',
+      pattern: 'tiger_stripes_gold',
+      headAccessory: 'dragon_horns',
+      backWing: 'cosmic_nebula_wings',
+      auraEffect: 'divine_matrix',
+      auraIntensity: 'godlike',
+      particleStyle: 'golden_coins',
+      heldArtifact: 'dragon_pearl',
+      idleAnimation: 'flapping',
+      shinyShimmer: true,
+      costumeTitle: 'Thái Cổ Long Vương',
+    },
+  },
+  {
+    id: 'astral_sakura_fairy',
+    name: 'Anh Đào Tiên Giới',
+    icon: '🌸',
+    desc: 'Linh hồ tiên cảnh cầm quyền trượng hoa anh đào, hoa rơi ngập trời',
+    appearance: {
+      archetype: 'kitsune',
+      primaryColor: '#db2777',
+      secondaryColor: '#f472b6',
+      eyeGlowColor: '#fce7f3',
+      pattern: 'sacred_lotus',
+      headAccessory: 'flower_wreath',
+      backWing: 'butterfly_prism_wings',
+      auraEffect: 'nature_leaves',
+      auraIntensity: 'radiant',
+      particleStyle: 'sakura_blossom',
+      heldArtifact: 'magic_staff',
+      idleAnimation: 'float',
+      shinyShimmer: true,
+      costumeTitle: 'Anh Đào Tiên Hồ',
+    },
+  },
 ];
 
 export const PetAppearanceStudioModal: React.FC<PetAppearanceStudioModalProps> = ({
@@ -277,7 +372,7 @@ export const PetAppearanceStudioModal: React.FC<PetAppearanceStudioModalProps> =
   // Preview controls
   const [previewFacing, setPreviewFacing] = useState<'front' | 'back'>('front');
   const [previewCombatState, setPreviewCombatState] = useState<'idle' | 'attack' | 'hit' | 'special' | 'victory'>('idle');
-  const [activeTab, setActiveTab] = useState<'sets' | 'archetype' | 'colors' | 'accessories' | 'wings' | 'patterns' | 'aura' | 'title'>('sets');
+  const [activeTab, setActiveTab] = useState<'artworks' | 'sets' | 'archetype' | 'colors' | 'accessories' | 'wings' | 'artifacts' | 'motion' | 'patterns' | 'aura' | 'title'>('artworks');
   const [saveSuccessNotice, setSaveSuccessNotice] = useState(false);
 
   if (!isOpen) return null;
@@ -318,15 +413,21 @@ export const PetAppearanceStudioModal: React.FC<PetAppearanceStudioModalProps> =
       'kitsune',
       'leviathan',
       'behemoth',
+      'turtle',
+      'serpent',
       'mecha',
       'celestial',
+      'void_fiend',
+      'crystal_golem',
     ];
-    const patterns: PetPattern[] = ['none', 'stripes', 'runes', 'scales', 'stars', 'lightning_circuit', 'cosmic_nebula', 'divine_crest', 'tiger_stripes_gold'];
-    const heads: PetHeadAccessory[] = ['none', 'crown', 'dragon_horns', 'valkyrie_helm', 'pharaoh_crown', 'cyber_headset', 'cyber_visor', 'ninja_band', 'wizard_hat', 'fox_mask', 'halo', 'flame_tiara', 'flower_wreath'];
-    const wings: PetBackWing[] = ['none', 'dragon_wings', 'phoenix_flame_wings', 'angel_feathers', 'void_shadow_cape', 'celestial_mech_thrusters', 'energy_blades', 'butterfly_prism_wings', 'fairy_wings'];
-    const auras: PetAuraEffect[] = ['none', 'flames', 'frost', 'sparks', 'void', 'starlight', 'supernova', 'divine_matrix', 'ice_crystals', 'dark_matter', 'nature_leaves'];
-    const particles: PetParticleStyle[] = ['none', 'sparks', 'feathers', 'petals', 'stars', 'lightning', 'bubbles', 'embers'];
+    const patterns: PetPattern[] = ['none', 'stripes', 'runes', 'scales', 'stars', 'lightning_circuit', 'cosmic_nebula', 'divine_crest', 'tiger_stripes_gold', 'sacred_lotus', 'dragon_scale_armor'];
+    const heads: PetHeadAccessory[] = ['none', 'crown', 'dragon_horns', 'valkyrie_helm', 'pharaoh_crown', 'cyber_headset', 'cyber_visor', 'ninja_band', 'wizard_hat', 'fox_mask', 'halo', 'flame_tiara', 'flower_wreath', 'warlord_helm', 'astral_circlet'];
+    const wings: PetBackWing[] = ['none', 'dragon_wings', 'phoenix_flame_wings', 'angel_feathers', 'void_shadow_cape', 'celestial_mech_thrusters', 'energy_blades', 'butterfly_prism_wings', 'fairy_wings', 'golden_rings_wing', 'cosmic_nebula_wings'];
+    const auras: PetAuraEffect[] = ['none', 'flames', 'frost', 'sparks', 'void', 'starlight', 'supernova', 'divine_matrix', 'ice_crystals', 'dark_matter', 'nature_leaves', 'rainbow_chakra', 'plasma_storm'];
+    const particles: PetParticleStyle[] = ['none', 'sparks', 'feathers', 'petals', 'stars', 'lightning', 'bubbles', 'embers', 'golden_coins', 'sakura_blossom', 'ancient_glyphs'];
     const intensities: PetAuraIntensity[] = ['subtle', 'radiant', 'hyper', 'godlike'];
+    const artifacts: PetHeldArtifact[] = ['none', 'divine_sword', 'dragon_pearl', 'orb_of_elements', 'holy_shield', 'thunder_hammer', 'magic_staff'];
+    const animations: PetIdleAnimation[] = ['breathe', 'float', 'bounce', 'flapping', 'hyper_pulse'];
 
     const randomPalette = PRESET_PALETTES[Math.floor(Math.random() * PRESET_PALETTES.length)];
     const randomArchetype = archetypes[Math.floor(Math.random() * archetypes.length)];
@@ -336,6 +437,9 @@ export const PetAppearanceStudioModal: React.FC<PetAppearanceStudioModalProps> =
     const randomAura = auras[Math.floor(Math.random() * auras.length)];
     const randomParticle = particles[Math.floor(Math.random() * particles.length)];
     const randomIntensity = intensities[Math.floor(Math.random() * intensities.length)];
+    const randomArtifact = artifacts[Math.floor(Math.random() * artifacts.length)];
+    const randomAnimation = animations[Math.floor(Math.random() * animations.length)];
+    const randomShiny = Math.random() > 0.5;
 
     setDraftApp({
       archetype: randomArchetype,
@@ -348,6 +452,9 @@ export const PetAppearanceStudioModal: React.FC<PetAppearanceStudioModalProps> =
       auraEffect: randomAura,
       auraIntensity: randomIntensity,
       particleStyle: randomParticle,
+      heldArtifact: randomArtifact,
+      idleAnimation: randomAnimation,
+      shinyShimmer: randomShiny,
       customSkinName: randomPalette.name,
       costumeTitle: `Thần Thú ${activePet.name}`,
     });
@@ -535,22 +642,64 @@ export const PetAppearanceStudioModal: React.FC<PetAppearanceStudioModalProps> =
 
           {/* Right Column: Customization Tabs (7 cols) */}
           <div className="md:col-span-7 p-4 sm:p-5 flex flex-col justify-between space-y-3.5">
+            {/* Visual Style Selector Banner */}
+            <div className="flex items-center justify-between p-2.5 rounded-2xl bg-gradient-to-r from-amber-950/60 via-purple-950/40 to-slate-950 border border-amber-500/40">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">✨</span>
+                <div>
+                  <div className="text-xs font-black text-amber-300">Đồ Họa Ngoại Hình Linh Thú</div>
+                  <div className="text-[10px] text-slate-400">Linh Thú 3D Tách Phông Độc Bản (Hiện mỗi pet, không khung ảnh) hoặc Bản Vẽ Vector</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 bg-slate-950/80 p-1 rounded-xl border border-slate-800">
+                <button
+                  onClick={() => {
+                    setDraftApp((prev) => ({ ...prev, visualMode: '3d_art' }));
+                    playSuccessChime();
+                  }}
+                  className={`px-2.5 py-1.5 rounded-lg text-[10px] sm:text-xs font-black transition-all cursor-pointer ${
+                    (draftApp.visualMode || '3d_art') === '3d_art'
+                      ? 'bg-gradient-to-r from-amber-400 to-yellow-500 text-slate-950 shadow-md shadow-amber-500/30'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  ✨ Thần Thú 3D (Tách Nền)
+                </button>
+                <button
+                  onClick={() => {
+                    setDraftApp((prev) => ({ ...prev, visualMode: 'vector' }));
+                    playSuccessChime();
+                  }}
+                  className={`px-2.5 py-1.5 rounded-lg text-[10px] sm:text-xs font-black transition-all cursor-pointer ${
+                    draftApp.visualMode === 'vector'
+                      ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-md'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  📐 Vẽ Vector
+                </button>
+              </div>
+            </div>
+
             {/* Tabs Row */}
-            <div className="grid grid-cols-4 sm:grid-cols-8 gap-1 bg-slate-950 p-1 rounded-2xl border border-slate-800">
+            <div className="grid grid-cols-4 sm:grid-cols-11 gap-1 bg-slate-950 p-1 rounded-2xl border border-slate-800">
               {[
+                { id: 'artworks', label: '✨ Thần Thú 3D', color: 'from-amber-400 to-rose-500' },
                 { id: 'sets', label: '🌟 Bộ Skin', color: 'from-amber-500 to-yellow-600' },
                 { id: 'archetype', label: '🐲 Dáng Thú', color: 'from-amber-500 to-amber-600' },
                 { id: 'colors', label: '🎨 Màu & Mắt', color: 'from-rose-500 to-rose-600' },
                 { id: 'accessories', label: '👑 Mũ Nón', color: 'from-yellow-500 to-amber-600' },
                 { id: 'wings', label: '🪽 Đôi Cánh', color: 'from-cyan-500 to-blue-600' },
+                { id: 'artifacts', label: '⚔️ Thần Binh', color: 'from-orange-500 to-amber-600' },
+                { id: 'motion', label: '💫 Động Tác', color: 'from-emerald-500 to-green-600' },
                 { id: 'patterns', label: '✨ Hoa Văn', color: 'from-indigo-500 to-purple-600' },
                 { id: 'aura', label: '⚡ Hào Quang', color: 'from-purple-500 to-pink-600' },
-                { id: 'title', label: '🏷️ Danh Hiệu', color: 'from-emerald-500 to-teal-600' },
+                { id: 'title', label: '🏷️ Danh Hiệu', color: 'from-teal-500 to-cyan-600' },
               ].map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as any)}
-                  className={`py-2 px-1 rounded-xl text-[10px] sm:text-[11px] font-bold transition-all text-center cursor-pointer ${
+                  className={`py-2 px-1 rounded-xl text-[9px] sm:text-[10px] font-bold transition-all text-center cursor-pointer ${
                     activeTab === tab.id
                       ? `bg-gradient-to-r ${tab.color} text-slate-950 font-black shadow`
                       : 'text-slate-400 hover:text-white'
@@ -563,6 +712,104 @@ export const PetAppearanceStudioModal: React.FC<PetAppearanceStudioModalProps> =
 
             {/* Tab Contents */}
             <div className="space-y-3 min-h-[290px]">
+              {/* TAB: CREATURE ARTWORKS (TRANH THẦN THÚ 3D / SIÊU THỰC) */}
+              {activeTab === 'artworks' && (
+                <div className="space-y-3">
+                  <div className="text-xs text-slate-300 font-bold flex items-center justify-between">
+                    <span>Kho Tranh Thần Thú 3D Siêu Thực Độ Phân Giải Cao (Độc Quyền):</span>
+                    <span className="text-amber-400 font-extrabold text-[10px]">✨ 10 Siêu Phẩm</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[300px] overflow-y-auto pr-1">
+                    {CREATURE_ARTWORK_GALLERY.map((art) => {
+                      const isSelected =
+                        draftApp.customArtworkUrl === art.imageUrl ||
+                        (!draftApp.customArtworkUrl && draftApp.archetype === art.archetype);
+
+                      return (
+                        <div
+                          key={art.id}
+                          onClick={() => {
+                            setDraftApp((prev) => ({
+                              ...prev,
+                              visualMode: '3d_art',
+                              customArtworkUrl: art.imageUrl,
+                              archetype: art.archetype,
+                              customSkinName: art.name,
+                            }));
+                            playSuccessChime();
+                          }}
+                          className={`p-2.5 rounded-2xl border flex items-center gap-3 transition-all cursor-pointer text-left ${
+                            isSelected
+                              ? 'bg-amber-500/20 border-amber-400 ring-2 ring-amber-500/40 shadow-lg'
+                              : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+                          }`}
+                        >
+                          <div className="relative w-16 h-16 rounded-xl overflow-hidden border border-amber-400/40 shrink-0">
+                            <img
+                              src={art.imageUrl}
+                              alt={art.name}
+                              className="w-full h-full object-cover filter contrast-110"
+                            />
+                            {isSelected && (
+                              <div className="absolute inset-0 bg-amber-500/20 flex items-center justify-center">
+                                <div className="p-1 rounded-full bg-amber-500 text-slate-950 shadow">
+                                  <Check className="w-3.5 h-3.5 stroke-[3]" />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 mb-0.5">
+                              <span className="text-xs font-black text-white truncate">{art.name}</span>
+                              <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 font-bold shrink-0">
+                                {art.tag}
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-slate-400 line-clamp-2 leading-relaxed">
+                              {art.description}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Custom Artwork URL Input */}
+                  <div className="p-2.5 rounded-2xl bg-slate-950 border border-slate-800 space-y-1.5">
+                    <div className="text-[11px] font-bold text-slate-300 flex items-center justify-between">
+                      <span>🔗 Nhập Đường Dẫn Link Ảnh Ngoại Hình Tùy Chọn (URL):</span>
+                      {draftApp.customArtworkUrl && (
+                        <button
+                          onClick={() => {
+                            setDraftApp((prev) => ({ ...prev, customArtworkUrl: undefined }));
+                            playSuccessChime();
+                          }}
+                          className="text-[10px] text-rose-400 hover:text-rose-300 font-bold cursor-pointer"
+                        >
+                          Xóa link về mặc định
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="url"
+                        placeholder="https://... (Link ảnh PNG, JPG hoặc WebP)"
+                        value={draftApp.customArtworkUrl || ''}
+                        onChange={(e) =>
+                          setDraftApp((prev) => ({
+                            ...prev,
+                            visualMode: '3d_art',
+                            customArtworkUrl: e.target.value.trim() || undefined,
+                          }))
+                        }
+                        className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* TAB 0: 1-CLICK MYTHIC SKIN SETS */}
               {activeTab === 'sets' && (
                 <div className="space-y-2.5">
@@ -618,6 +865,8 @@ export const PetAppearanceStudioModal: React.FC<PetAppearanceStudioModalProps> =
                       { id: 'serpent' as PetArchetype, name: 'Rắn Thần', icon: '🐍', desc: 'Mãng xà lướt nhẹ' },
                       { id: 'mecha' as PetArchetype, name: 'Cơ Khí Mecha', icon: '🤖', desc: 'Robot giáp tương lai' },
                       { id: 'celestial' as PetArchetype, name: 'Sáng Thế Tối Cao', icon: '👑', desc: 'Vương giả thần giới' },
+                      { id: 'void_fiend' as PetArchetype, name: 'Ma Thần Vực Thẳm', icon: '😈', desc: 'Sừng ác ma u tối, sức mạnh hủy diệt' },
+                      { id: 'crystal_golem' as PetArchetype, name: 'Cự Thần Pha Lê', icon: '💎', desc: 'Giáp đá góc cạnh, lõi tinh thạch' },
                     ].map((arch) => (
                       <button
                         key={arch.id}
@@ -740,6 +989,8 @@ export const PetAppearanceStudioModal: React.FC<PetAppearanceStudioModalProps> =
                       { id: 'halo' as PetHeadAccessory, name: 'Vòng Hào Quang Thần', icon: '💫' },
                       { id: 'horns' as PetHeadAccessory, name: 'Sừng Quỷ Hoàng Kim', icon: '🤘' },
                       { id: 'flower_wreath' as PetHeadAccessory, name: 'Vòng Hoa Thần Rừng', icon: '🌸' },
+                      { id: 'warlord_helm' as PetHeadAccessory, name: 'Mũ Chiến Tướng Ma Thần', icon: '🪖' },
+                      { id: 'astral_circlet' as PetHeadAccessory, name: 'Vòng Khuyên Tinh Tú', icon: '✨' },
                     ].map((acc) => (
                       <button
                         key={acc.id}
@@ -776,6 +1027,8 @@ export const PetAppearanceStudioModal: React.FC<PetAppearanceStudioModalProps> =
                       { id: 'butterfly_prism_wings' as PetBackWing, name: 'Cánh Bướm Pha Lê', icon: '💎', desc: 'Pha lê quang phổ óng ánh' },
                       { id: 'energy_blades' as PetBackWing, name: 'Lưỡi Dao Plasma', icon: '⚡', desc: 'Cánh năng lượng công nghệ' },
                       { id: 'fairy_wings' as PetBackWing, name: 'Cánh Tiên Nữ', icon: '🦋', desc: 'Cánh bướm mộng mơ nhẹ nhàng' },
+                      { id: 'golden_rings_wing' as PetBackWing, name: 'Vòng Kim Luân Thần Thánh', icon: '💫', desc: 'Vòng hào quang xoay tròn thần thánh' },
+                      { id: 'cosmic_nebula_wings' as PetBackWing, name: 'Cánh Tinh Vân Vũ Trụ', icon: '🌌', desc: 'Cánh dải ngân hà huyền bí tím hồng' },
                     ].map((w) => (
                       <button
                         key={w.id}
@@ -798,6 +1051,107 @@ export const PetAppearanceStudioModal: React.FC<PetAppearanceStudioModalProps> =
                 </div>
               )}
 
+              {/* TAB: HELD ARTIFACTS / WEAPONS (THẦN BINH & PHÁP BẢO) */}
+              {activeTab === 'artifacts' && (
+                <div className="space-y-3">
+                  <div className="text-xs text-slate-300 font-bold flex items-center justify-between">
+                    <span>Trang bị Pháp Bảo & Thần Khí lơ lửng bên cạnh linh thú:</span>
+                    <span className="text-amber-400 font-bold text-[10px]">✨ 3.0 Ultra</span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-[300px] overflow-y-auto pr-1">
+                    {[
+                      { id: 'none' as PetHeldArtifact, name: 'Không Mang Thần Binh', icon: '❌', desc: 'Trạng thái tay không thuần túy' },
+                      { id: 'divine_sword' as PetHeldArtifact, name: 'Thánh Kiếm Hoàng Kim', icon: '🗡️', desc: 'Thánh kiếm diệt ma phát sáng uy lực' },
+                      { id: 'dragon_pearl' as PetHeldArtifact, name: 'Thần Châu Long Tộc', icon: '🔮', desc: 'Ngọc rồng thái cổ hộ thể vô địch' },
+                      { id: 'orb_of_elements' as PetHeldArtifact, name: 'Ngọc Cầu Nguyên Tố', icon: '🪐', desc: 'Cầu ma pháp xoay tròn hấp thụ mana' },
+                      { id: 'holy_shield' as PetHeldArtifact, name: 'Khiên Thánh Quang', icon: '🛡️', desc: 'Lá chắn hộ thể chặn mọi sát thương' },
+                      { id: 'thunder_hammer' as PetHeldArtifact, name: 'Búa Sét Thần Lôi', icon: '🔨', desc: 'Búa sấm sét cổ đại mang điện áp ngàn vôn' },
+                      { id: 'magic_staff' as PetHeldArtifact, name: 'Quyền Trượng Ma Pháp', icon: '🪄', desc: 'Trượng tinh linh khảm đá quý hộ mệnh' },
+                    ].map((art) => (
+                      <button
+                        key={art.id}
+                        onClick={() => {
+                          setDraftApp((prev) => ({ ...prev, heldArtifact: art.id }));
+                          playSuccessChime();
+                        }}
+                        className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
+                          (draftApp.heldArtifact || 'none') === art.id
+                            ? 'bg-amber-500/20 border-amber-500 shadow-md ring-2 ring-amber-500/30'
+                            : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+                        }`}
+                      >
+                        <div className="text-2xl mb-1">{art.icon}</div>
+                        <div className="text-xs font-bold text-white">{art.name}</div>
+                        <div className="text-[10px] text-slate-400">{art.desc}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* TAB: MOTION & SHINY SHIMMER (ĐỘNG TÁC & HIỆU ỨNG SÁNG KIM) */}
+              {activeTab === 'motion' && (
+                <div className="space-y-3.5">
+                  <div>
+                    <div className="text-xs text-slate-300 font-bold mb-1.5 flex items-center justify-between">
+                      <span>1. Động tác chuyển động chờ (Idle Animation):</span>
+                      <span className="text-emerald-400 font-extrabold text-[10px]">Mượt Mà 60FPS</span>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {[
+                        { id: 'breathe' as PetIdleAnimation, name: 'Hít Thở Nhẹ', icon: '🧘', desc: 'Nhịp thở sinh động tự nhiên' },
+                        { id: 'float' as PetIdleAnimation, name: 'Bay Lơ Lửng', icon: '🕊️', desc: 'Lơ lửng trên không trung huyền ảo' },
+                        { id: 'bounce' as PetIdleAnimation, name: 'Nhún Nhảy Vui Vẻ', icon: '🦘', desc: 'Bật nhảy vui tươi phấn khích' },
+                        { id: 'flapping' as PetIdleAnimation, name: 'Vỗ Cánh Khí Lực', icon: '🪽', desc: 'Đập cánh bay bổng thần tốc' },
+                        { id: 'hyper_pulse' as PetIdleAnimation, name: 'Xung Kích Năng Lượng', icon: '💥', desc: 'Phát quang nhịp tim năng lượng cực đại' },
+                      ].map((mot) => (
+                        <button
+                          key={mot.id}
+                          onClick={() => {
+                            setDraftApp((prev) => ({ ...prev, idleAnimation: mot.id }));
+                            playSuccessChime();
+                          }}
+                          className={`p-2.5 rounded-2xl border text-left transition-all cursor-pointer ${
+                            (draftApp.idleAnimation || 'breathe') === mot.id
+                              ? 'bg-emerald-500/20 border-emerald-500 shadow-md ring-2 ring-emerald-500/30'
+                              : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+                          }`}
+                        >
+                          <div className="text-xl mb-0.5">{mot.icon}</div>
+                          <div className="text-xs font-bold text-white">{mot.name}</div>
+                          <div className="text-[10px] text-slate-400">{mot.desc}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-950/40 via-purple-950/30 to-slate-950 border border-amber-500/40 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="text-xl">✨</div>
+                        <div>
+                          <div className="text-xs font-black text-amber-300">Lớp Phủ Kim Loại Ngũ Sắc (Shiny Iridescent Overlay)</div>
+                          <div className="text-[10px] text-slate-400">Hiệu ứng lấp lánh ánh kim chuyển sắc quét ngang toàn thân thú cực hiếm</div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setDraftApp((prev) => ({ ...prev, shinyShimmer: !prev.shinyShimmer }));
+                          playSuccessChime();
+                        }}
+                        className={`px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                          draftApp.shinyShimmer
+                            ? 'bg-gradient-to-r from-amber-400 to-yellow-500 text-slate-950 shadow-lg shadow-amber-500/40'
+                            : 'bg-slate-800 text-slate-300 hover:text-white border border-slate-700'
+                        }`}
+                      >
+                        {draftApp.shinyShimmer ? 'ĐANG BẬT SHINY ✨' : 'BẬT SHINY ⭐'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* TAB 5: PATTERNS (HOA VĂN & ẤN KÝ) */}
               {activeTab === 'patterns' && (
                 <div className="space-y-3">
@@ -813,6 +1167,8 @@ export const PetAppearanceStudioModal: React.FC<PetAppearanceStudioModalProps> =
                       { id: 'scales' as PetPattern, name: 'Vảy Rồng Thần', icon: '🛡️', desc: 'Lớp vảy bảo giáp xếp tầng' },
                       { id: 'stripes' as PetPattern, name: 'Vằn Sọc Chiến Trận', icon: '🐾', desc: 'Sọc vằn đấu sĩ truyền thống' },
                       { id: 'stars' as PetPattern, name: 'Ngôi Sao Triệu Hồi', icon: '⭐', desc: 'Chòm sao hộ mệnh' },
+                      { id: 'sacred_lotus' as PetPattern, name: 'Bảo Liên Hoa Thần', icon: '🪷', desc: 'Đoá sen thiêng phát sáng hồng ngọc' },
+                      { id: 'dragon_scale_armor' as PetPattern, name: 'Hộ Giáp Long Lân', icon: '🛡️', desc: 'Vảy rồng hoàng kim xếp giáp hộ tâm' },
                     ].map((pat) => (
                       <button
                         key={pat.id}
@@ -849,6 +1205,8 @@ export const PetAppearanceStudioModal: React.FC<PetAppearanceStudioModalProps> =
                       { id: 'flames' as PetAuraEffect, name: 'Lửa Hỏa Ngục', icon: '🔥' },
                       { id: 'sparks' as PetAuraEffect, name: 'Tia Sét Lôi Điện', icon: '⚡' },
                       { id: 'nature_leaves' as PetAuraEffect, name: 'Lá Rừng Thái Sơ', icon: '🍃' },
+                      { id: 'rainbow_chakra' as PetAuraEffect, name: 'Luân Xa Thất Sắc', icon: '🌈' },
+                      { id: 'plasma_storm' as PetAuraEffect, name: 'Bão Plasma Tinh Cầu', icon: '🌀' },
                     ].map((aur) => (
                       <button
                         key={aur.id}
@@ -897,6 +1255,9 @@ export const PetAppearanceStudioModal: React.FC<PetAppearanceStudioModalProps> =
                           { id: 'stars' as PetParticleStyle, name: 'Bụi Sao', icon: '✨' },
                           { id: 'lightning' as PetParticleStyle, name: 'Tia Sét', icon: '⚡' },
                           { id: 'embers' as PetParticleStyle, name: 'Tàn Lửa', icon: '🔥' },
+                          { id: 'golden_coins' as PetParticleStyle, name: 'Tiền Vàng', icon: '🪙' },
+                          { id: 'sakura_blossom' as PetParticleStyle, name: 'Hoa Đào', icon: '🌸' },
+                          { id: 'ancient_glyphs' as PetParticleStyle, name: 'Cổ Tự', icon: '📜' },
                         ].map((part) => (
                           <button
                             key={part.id}

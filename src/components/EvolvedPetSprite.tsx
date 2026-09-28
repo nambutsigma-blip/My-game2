@@ -1,51 +1,14 @@
 import React from 'react';
 import { PetCompanion, PetAppearance } from '../types';
 import { PokemonPetVisual } from './PokemonPetVisual';
+import { getArtworkForPet } from '../utils/petArtworks';
 
 export const getElementPetImageUrl = (element?: string) => {
-  switch (element) {
-    case 'fire':
-      return 'https://images.unsplash.com/photo-1563089145-599997674d42?w=400&q=80';
-    case 'frost':
-      return 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=400&q=80';
-    case 'thunder':
-      return 'https://images.unsplash.com/photo-1534447677768-be436bb09401?w=400&q=80';
-    case 'shadow':
-    case 'void':
-      return 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=400&q=80';
-    case 'nature':
-      return 'https://images.unsplash.com/photo-1511497584788-87676110230b?w=400&q=80';
-    case 'gold':
-    case 'divine':
-      return 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=400&q=80';
-    case 'cosmic':
-    default:
-      return 'https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?w=400&q=80';
-  }
+  return getArtworkForPet(undefined, undefined, undefined);
 };
 
 export const getCustomPetArtwork = (pet: PetCompanion & { imageUrl?: string }) => {
-  if (pet.imageUrl) return pet.imageUrl;
-  const nameLower = (pet.name + ' ' + (pet.description || '')).toLowerCase();
-  if (nameLower.includes('chúa tể') || nameLower.includes('lord') || nameLower.includes('nhà phát hành') || nameLower.includes('publisher')) {
-    return 'https://images.unsplash.com/photo-1634017839464-5c339ebe3cb4?w=500&q=80'; // Ultra majestic cosmic divine entity
-  }
-  if (nameLower.includes('cerberus') || nameLower.includes('hound') || nameLower.includes('ba đầu') || nameLower.includes('dog') || nameLower.includes('chó')) {
-    return 'https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=500&q=80'; // Fierce multi-headed guardian hound art
-  }
-  if (nameLower.includes('dragon') || nameLower.includes('rồng') || nameLower.includes('drake')) {
-    return 'https://images.unsplash.com/photo-1563089145-599997674d42?w=500&q=80';
-  }
-  if (nameLower.includes('phoenix') || nameLower.includes('phượng') || nameLower.includes('bird') || nameLower.includes('chim')) {
-    return 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=500&q=80';
-  }
-  if (nameLower.includes('golem') || nameLower.includes('titan') || nameLower.includes('stone') || nameLower.includes('đá') || nameLower.includes('tượng')) {
-    return 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=500&q=80';
-  }
-  if (nameLower.includes('serpent') || nameLower.includes('snake') || nameLower.includes('rắn') || nameLower.includes('leviathan')) {
-    return 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=500&q=80';
-  }
-  return getElementPetImageUrl(pet.element);
+  return getArtworkForPet(pet.appearance?.archetype, pet.appearance?.customArtworkUrl, pet.imageUrl);
 };
 
 interface EvolvedPetSpriteProps {
@@ -421,47 +384,23 @@ export const EvolvedPetSprite: React.FC<EvolvedPetSpriteProps> = ({
         </>
       )}
 
-      {/* 2. PET SPRITE CONTAINER WITH POKEMON VISUAL OR ARTWORK */}
+      {/* 2. PET SPRITE (PURE CHARACTER SPRITE - NO FRAMES, NO BORDERS) */}
       <div
-        className={`relative z-10 rounded-2xl overflow-hidden flex items-center justify-center transition-all duration-500 ${containerSize} ${
-          evolved
-            ? 'bg-gradient-to-tr from-amber-500/20 via-slate-900 to-purple-600/30 border-2 border-yellow-300 shadow-2xl shadow-yellow-400/50 ring-2 ring-amber-400/30'
-            : (pet.enchantmentLevel || 0) >= 3
-            ? 'bg-slate-900 border-2 border-purple-400 shadow-lg shadow-purple-950 ring-1 ring-purple-400/20'
-            : 'bg-slate-900/90 border border-slate-700 shadow-md'
-        }`}
+        className={`relative z-10 flex items-center justify-center transition-all duration-500 overflow-visible ${containerSize}`}
       >
-        {pet.imageUrl ? (
-          <div className="relative w-full h-full group">
-            <img
-              src={pet.imageUrl}
-              alt={pet.name}
-              referrerPolicy="no-referrer"
-              className="w-full h-full object-cover filter saturate-125 contrast-110 transform hover:scale-110 transition-transform duration-500"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent opacity-60" />
-            <div className="absolute bottom-1 right-1 text-xs drop-shadow">{pet.avatarIcon}</div>
-          </div>
-        ) : (
-          <div className="relative w-full h-full flex items-center justify-center p-1">
-            <PokemonPetVisual
-              pet={pet}
-              overrideAppearance={overrideAppearance}
-              size={size === 'giant' ? 'xl' : size === 'xl' ? 'lg' : size === 'lg' ? 'md' : 'sm'}
-              showAura={false}
-              showShadow={false}
-              showTitleBadge={false}
-              combatState={combatState === 'spell' ? 'special' : combatState}
-            />
-            <div className="absolute bottom-0.5 right-0.5 text-[10px] bg-slate-950/80 rounded-full px-1 border border-slate-700">
-              {pet.avatarIcon}
-            </div>
-          </div>
-        )}
+        <PokemonPetVisual
+          pet={pet}
+          overrideAppearance={overrideAppearance}
+          size={size === 'giant' ? 'giant' : size === 'xl' ? 'xl' : size === 'lg' ? 'lg' : size === 'md' ? 'md' : 'sm'}
+          showAura={false}
+          showShadow={false}
+          showTitleBadge={false}
+          combatState={combatState === 'spell' ? 'special' : combatState}
+        />
 
-        {/* Evolved Godhood Crown Badge on Bottom-Right */}
+        {/* Evolved Godhood Crown Badge floating over top-right */}
         {evolved && (
-          <div className="absolute -bottom-1 -right-1 bg-gradient-to-r from-amber-500 to-yellow-300 text-slate-950 font-black text-[8px] px-1 py-0.5 rounded-full shadow-lg border border-yellow-200 flex items-center gap-0.5 z-30 uppercase tracking-tighter animate-pulse">
+          <div className="absolute -top-1 -right-1 bg-gradient-to-r from-amber-500 to-yellow-300 text-slate-950 font-black text-[8px] px-1.5 py-0.5 rounded-full shadow-lg border border-yellow-200 flex items-center gap-0.5 z-30 uppercase tracking-tighter animate-pulse pointer-events-none">
             <span>👑</span>
             <span>MAX</span>
           </div>
