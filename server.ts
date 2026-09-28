@@ -207,6 +207,300 @@ function evaluateDragonChallengeLocally(studentResponse: string, unitTopic?: str
   };
 }
 
+// Local vocabulary, phrasal verbs, and idioms fallback dictionary
+const LOCAL_HIGHLIGHT_DICT: Record<string, {
+  type: 'word' | 'phrase' | 'idiom' | 'sentence' | 'grammar_structure';
+  typeLabel: string;
+  phonetic?: string;
+  meaningVi: string;
+  detailedExplanation: string;
+  grammarBreakdown?: string;
+  synonyms?: string[];
+  antonyms?: string[];
+  collocations?: string[];
+  examples: { en: string; vi: string }[];
+  examTip?: string;
+  difficultyLevel?: string;
+}> = {
+  heritage: {
+    type: 'word',
+    typeLabel: 'Danh từ (Noun)',
+    phonetic: '/ˈher.ɪ.tɪdʒ/',
+    meaningVi: 'Di sản (văn hóa, lịch sử, truyền thống)',
+    detailedExplanation: 'Chỉ các nét đẹp văn hóa, phong tục, công trình kiến trúc hoặc giá trị tinh thần được lưu truyền qua nhiều thế hệ.',
+    grammarBreakdown: 'Danh từ không đếm được hoặc đếm được. Đi với tính từ: cultural heritage, natural heritage, architectural heritage.',
+    synonyms: ['legacy', 'tradition', 'inheritance'],
+    antonyms: ['novelty', 'modernity'],
+    collocations: ['cultural heritage', 'world heritage site', 'preserve heritage'],
+    examples: [
+      { en: 'Trang An is a renowned World Cultural and Natural Heritage site in Vietnam.', vi: 'Tràng An là một quần thể Di sản Văn hóa và Thiên nhiên Thế giới nổi tiếng ở Việt Nam.' },
+      { en: 'We must make concerted efforts to preserve our national heritage.', vi: 'Chúng ta phải nỗ lực phối hợp để gìn giữ di sản quốc gia.' }
+    ],
+    examTip: 'Trong đề thi vào 10, "heritage" thường đi với động từ "preserve" (bảo tồn) hoặc "pass down" (truyền lại).',
+    difficultyLevel: 'Chuẩn Vào 10'
+  },
+  preserve: {
+    type: 'word',
+    typeLabel: 'Động từ (Verb)',
+    phonetic: '/prɪˈzɜːv/',
+    meaningVi: 'Bảo tồn, gìn giữ, giữ nguyên vẹn',
+    detailedExplanation: 'Hành động bảo vệ điều gì đó khỏi sự hủy hoại, mai một hoặc suy thoái theo thời gian.',
+    grammarBreakdown: 'Ngoại động từ: preserve something (from something). Danh từ tương ứng: preservation. Tính từ: preservative.',
+    synonyms: ['protect', 'conserve', 'maintain', 'safeguard'],
+    antonyms: ['destroy', 'damage', 'neglect'],
+    collocations: ['preserve ancient monuments', 'preserve peace', 'well-preserved'],
+    examples: [
+      { en: 'The villagers work hard to preserve their traditional customs.', vi: 'Dân làng làm việc chăm chỉ để gìn giữ các phong tục truyền thống của họ.' },
+      { en: 'Ancient manuscripts are carefully preserved in temperature-controlled rooms.', vi: 'Các bản thảo cổ được bảo quản cẩn thận trong phòng kiểm soát nhiệt độ.' }
+    ],
+    examTip: 'Phân biệt "preserve" (giữ nguyên hiện trạng không bị hỏng) với "conserve" (sử dụng tiết kiệm, tránh lãng phí tài nguyên).',
+    difficultyLevel: 'Chuẩn Vào 10'
+  },
+  magnificent: {
+    type: 'word',
+    typeLabel: 'Tính từ (Adjective)',
+    phonetic: '/mæɡˈnɪf.ə.sənt/',
+    meaningVi: 'Tráng lệ, nguy nga, tráng tuyệt, cực kỳ ấn tượng',
+    detailedExplanation: 'Mô tả vẻ đẹp lộng lẫy, kỳ vĩ của phong cảnh thiên nhiên, lâu đài hoặc một tác phẩm nghệ thuật đỉnh cao.',
+    grammarBreakdown: 'Tính từ mô tả (Descriptive Adjective). Trạng từ: magnificently. Danh từ: magnificence.',
+    synonyms: ['spectacular', 'breathtaking', 'splendid', 'grand'],
+    antonyms: ['modest', 'ordinary', 'plain'],
+    collocations: ['magnificent view', 'magnificent palace', 'magnificent achievement'],
+    examples: [
+      { en: 'From the mountain peak, visitors can admire a magnificent view of the sunrise.', vi: 'Từ đỉnh núi, du khách có thể chiêm ngưỡng quang cảnh bình minh tuyệt mỹ.' },
+      { en: 'The cathedral is renowned for its magnificent stained-glass windows.', vi: 'Nhà thờ nổi tiếng với những ô cửa kính màu tráng lệ.' }
+    ],
+    examTip: 'Thường xuất hiện trong phần bài đọc hiểu mô tả danh lam thắng cảnh thế giới trong đề tuyển sinh 10.',
+    difficultyLevel: 'Chuẩn Vào 10'
+  },
+  biodiversity: {
+    type: 'word',
+    typeLabel: 'Danh từ (Noun)',
+    phonetic: '/ˌbaɪ.əʊ.daɪˈvɜː.sə.ti/',
+    meaningVi: 'Đa dạng sinh học',
+    detailedExplanation: 'Sự phong phú về số lượng loài thực vật, động vật và hệ sinh thái trong một khu vực tự nhiên.',
+    grammarBreakdown: 'Danh từ không đếm được. Tiền tố bio- (sinh học) + diversity (sự đa dạng).',
+    synonyms: ['ecological diversity', 'biological variety'],
+    antonyms: ['monoculture'],
+    collocations: ['rich biodiversity', 'loss of biodiversity', 'conserve biodiversity'],
+    examples: [
+      { en: 'Deforestation causes severe loss of biodiversity in tropical rainforests.', vi: 'Nạn phá rừng gây ra sự mất mát đa dạng sinh học nghiêm trọng ở các khu rừng nhiệt đới.' },
+      { en: 'National parks are established to safeguard endemic biodiversity.', vi: 'Các vườn quốc gia được thành lập để bảo vệ sự đa dạng sinh học đặc hữu.' }
+    ],
+    examTip: 'Từ vựng chủ điểm Environment (Môi trường) - chuyên đề chiếm 15-20% câu hỏi đề thi vào 10.',
+    difficultyLevel: 'Chuẩn Vào 10'
+  },
+  stealth: {
+    type: 'word',
+    typeLabel: 'Danh từ / Tính từ (Noun / Adjective)',
+    phonetic: '/stelθ/',
+    meaningVi: 'Sự lén lút, vụng trộm, hành động tàng hình êm ả',
+    detailedExplanation: 'Hành động di chuyển hoặc thực hiện nhiệm vụ một cách thận trọng, im lặng tuyệt đối để không bị đối phương phát hiện.',
+    grammarBreakdown: 'Danh từ hoặc tính từ trước danh từ. Trạng từ: stealthily. Cụm từ cố định: by stealth (bằng cách lén lút).',
+    synonyms: ['secrecy', 'furtiveness', 'sneakiness'],
+    antonyms: ['openness', 'overtness'],
+    collocations: ['stealth mode', 'stealth boots', 'operate by stealth'],
+    examples: [
+      { en: 'The legendary egg thief entered the dragon lair with extreme stealth.', vi: 'Bậc thầy trộm trứng huyền thoại đột nhập ổ rồng với sự khéo léo và im lặng tột độ.' },
+      { en: 'Cats approach their prey with remarkable stealth.', vi: 'Mèo tiếp cận con mồi với bước đi rình rập cực kỳ êm ái.' }
+    ],
+    examTip: 'Lưu ý phát âm âm đuôi /θ/ (đặt đầu lưỡi giữa hai hàm răng và đẩy luồng hơi nhẹ).',
+    difficultyLevel: 'Chuyên Anh'
+  },
+  'look forward to': {
+    type: 'phrase',
+    typeLabel: 'Cụm động từ (Phrasal Verb)',
+    phonetic: '/lʊk ˈfɔː.wəd tuː/',
+    meaningVi: 'Rất mong chờ, háo hức chờ đợi điều gì',
+    detailedExplanation: 'Bày tỏ cảm xúc vui mừng, mong mỏi về một sự kiện sắp diễn ra trong tương lai gần.',
+    grammarBreakdown: 'Cấu trúc bắt buộc: look forward to + V-ing / Noun (Giới từ "to" ở đây là preposition, KHÔNG PHẢI to-infinitive).',
+    synonyms: ['anticipate', 'await eagerly'],
+    antonyms: ['dread', 'fear'],
+    collocations: ['look forward to hearing from you', 'look forward to the holiday'],
+    examples: [
+      { en: 'I am really looking forward to visiting Ha Long Bay this summer.', vi: 'Tôi thực sự rất mong đợi chuyến thăm Vịnh Hạ Long vào mùa hè này.' },
+      { en: 'We look forward to meeting your new pet companion.', vi: 'Chúng tôi rất mong được gặp người bạn thú cưng mới của bạn.' }
+    ],
+    examTip: 'BẪY KINH ĐIỂN VÀO 10: Sau "look forward to", học sinh hay chọn nhầm V-nguyên thể. Nhớ quy tắc: BẮT BUỘC DÙNG V-ING!',
+    difficultyLevel: 'Chuẩn Vào 10'
+  },
+  'give up': {
+    type: 'phrase',
+    typeLabel: 'Cụm động từ (Phrasal Verb)',
+    phonetic: '/ɡɪv ʌp/',
+    meaningVi: 'Từ bỏ, bỏ cuộc, dừng thói quen',
+    detailedExplanation: 'Ngừng làm điều gì đó vì quá khó khăn hoặc quyết định từ bỏ một thói quen xấu.',
+    grammarBreakdown: 'Give up + V-ing / Noun. Thường chia: gave up, given up.',
+    synonyms: ['quit', 'abandon', 'surrender', 'relinquish'],
+    antonyms: ['continue', 'persist', 'persevere', 'pursue'],
+    collocations: ['never give up', 'give up smoking', 'give up hope'],
+    examples: [
+      { en: 'No matter how difficult the exam is, you should never give up your dreams.', vi: 'Dù kỳ thi có khó đến đâu, bạn cũng đừng bao giờ từ bỏ ước mơ của mình.' },
+      { en: 'He decided to give up fast food to improve his overall health.', vi: 'Anh ấy quyết định từ bỏ đồ ăn nhanh để cải thiện sức khỏe toàn diện.' }
+    ],
+    examTip: 'Đề thi thường yêu cầu viết lại câu: "He stopped smoking" = "He gave up smoking".',
+    difficultyLevel: 'Chuẩn Vào 10'
+  },
+  'in spite of': {
+    type: 'phrase',
+    typeLabel: 'Cụm liên từ (Prepositional Phrase)',
+    phonetic: '/ɪn spaɪt əv/',
+    meaningVi: 'Mặc dù, bất chấp',
+    detailedExplanation: 'Diễn tả sự đối lập giữa hai mệnh đề, cho thấy hành động vẫn xảy ra bất chấp yếu tố gây trở ngại.',
+    grammarBreakdown: 'In spite of + Noun / Noun Phrase / V-ing = Despite + Noun/V-ing = Although / Even though + S + V.',
+    synonyms: ['despite', 'regardless of', 'notwithstanding'],
+    antonyms: ['because of', 'due to', 'owing to'],
+    collocations: ['in spite of the heavy rain', 'in spite of having difficulty'],
+    examples: [
+      { en: 'In spite of the bad weather, the students completed the dragon quest on time.', vi: 'Bất chấp thời tiết xấu, các học sinh đã hoàn thành nhiệm vụ săn rồng đúng hạn.' },
+      { en: 'She passed the entrance exam in spite of feeling extremely anxious.', vi: 'Cô ấy đã đỗ kỳ thi tuyển sinh dù cảm thấy vô cùng lo lắng.' }
+    ],
+    examTip: 'CỰC KỲ QUAN TRỌNG: Câu chuyển đổi giữa "Although (mệnh đề)" và "In spite of / Despite (danh từ/V-ing)" xuất hiện 99% trong đề thi vào 10!',
+    difficultyLevel: 'Chuẩn Vào 10'
+  },
+  'piece of cake': {
+    type: 'idiom',
+    typeLabel: 'Thành ngữ (Idiom)',
+    phonetic: '/piːs əv keɪk/',
+    meaningVi: 'Dễ như ăn bánh, việc cực kỳ dễ dàng',
+    detailedExplanation: 'Thành ngữ diễn đạt việc gì đó rất đơn giản, không đòi hỏi nhiều nỗ lực hay suy nghĩ phức tạp.',
+    grammarBreakdown: 'Cụm danh từ: It is a piece of cake. Thường dùng trong văn nói hoặc câu cảm thán.',
+    synonyms: ['as easy as ABC', 'child’s play', 'a breeze'],
+    antonyms: ['uphill battle', 'tough nut to crack'],
+    collocations: ['that exam was a piece of cake', 'treating this like a piece of cake'],
+    examples: [
+      { en: 'With thorough preparation, Stage 1 of the dragon lair is a piece of cake.', vi: 'Với sự chuẩn bị kỹ càng, Ải 1 của sào huyệt rồng chỉ dễ như ăn bánh.' },
+      { en: 'Don’t worry about tomorrow’s grammar test; it will be a piece of cake for you!', vi: 'Đừng lo về bài kiểm tra ngữ pháp ngày mai; nó sẽ dễ ợt đối với bạn thôi!' }
+    ],
+    examTip: 'Thành ngữ hay xuất hiện trong phần câu giao tiếp đối thoại (Everyday Communication / Dialogue Completion) của đề thi 10.',
+    difficultyLevel: 'Chuẩn Vào 10'
+  }
+};
+
+function generateLocalHighlightExplanation(cleanText: string, context?: string) {
+  const lower = cleanText.toLowerCase().trim();
+  const words = cleanText.split(/\s+/).filter(Boolean);
+
+  // 1. Direct dictionary match
+  if (LOCAL_HIGHLIGHT_DICT[lower]) {
+    const item = LOCAL_HIGHLIGHT_DICT[lower];
+    return {
+      originalText: cleanText,
+      ...item,
+      vietnameseMeaning: item.meaningVi,
+      sourceContext: context || undefined,
+    };
+  }
+
+  // 2. Check phrase matches in dictionary
+  for (const [key, val] of Object.entries(LOCAL_HIGHLIGHT_DICT)) {
+    if (lower.includes(key) || key.includes(lower)) {
+      return {
+        originalText: cleanText,
+        ...val,
+        vietnameseMeaning: val.meaningVi,
+        sourceContext: context || undefined,
+      };
+    }
+  }
+
+  // 3. Sentence analysis heuristic
+  if (words.length >= 4 || cleanText.includes('.') || cleanText.includes('?') || cleanText.includes('!')) {
+    const hasIf = /\bif\b/i.test(cleanText);
+    const hasAlthough = /\b(although|even though|though|despite|in spite of)\b/i.test(cleanText);
+    const hasPassive = /\b(is|are|was|were|been|being)\s+\w+(ed|en)\b/i.test(cleanText);
+    const hasSuggest = /\b(suggest|recommend|advise)\b/i.test(cleanText);
+    const hasWish = /\bwish(es)?\b/i.test(cleanText);
+
+    let structureName = 'Cấu trúc câu hoàn chỉnh';
+    let tip = 'Xác định rõ chủ ngữ và động từ chính của câu để tránh nhầm lẫn các mệnh đề phụ.';
+    let explanation = `Câu văn tiếng Anh gồm ${words.length} từ. Cần chú ý sự hòa hợp giữa chủ ngữ và vị ngữ cũng như mối liên kết giữa các vế câu.`;
+
+    if (hasIf) {
+      structureName = 'Mẫu câu điều kiện (Conditional Sentence)';
+      tip = 'Kiểm tra xem câu là loại 1 (có thật ở hiện tại/tương lai), loại 2 (giả định trái hiện tại) hay loại 3 (trái quá khứ).';
+      explanation = 'Mệnh đề If nêu lên điều kiện, mệnh đề chính nêu kết quả tương ứng. Chú ý cấu trúc: If + S + V, S + will/would + V.';
+    } else if (hasAlthough) {
+      structureName = 'Mệnh đề chỉ sự nhượng bộ (Concession Clause)';
+      tip = 'Nhớ rằng sau Although/Even though là Mệnh đề (S + V), còn sau Despite/In spite of là Cụm danh từ hoặc V-ing.';
+      explanation = 'Biểu thị sự đối lập tương phản giữa hai hành động, hành động ở vế chính vẫn diễn ra bất chấp vế phụ.';
+    } else if (hasPassive) {
+      structureName = 'Câu bị động (Passive Voice)';
+      tip = 'Công thức cốt lõi: S + be + V3/V-ed (+ by O). Luôn chia to be đúng thì và đúng số của chủ ngữ mới.';
+      explanation = 'Nhấn mạnh vào đối tượng chịu tác động của hành động thay vì người thực hiện.';
+    } else if (hasSuggest) {
+      structureName = 'Cấu trúc câu gợi ý (Suggest / Recommendation)';
+      tip = 'Ghi nhớ 2 dạng: S + suggest + V-ing HOẶC S + suggest + (that) + S + (should) + V-nguyên thể.';
+      explanation = 'Dùng để đưa ra lời khuyên hoặc gợi ý một phương án hành động.';
+    } else if (hasWish) {
+      structureName = 'Câu ước với WISH (Subjunctive Mood)';
+      tip = 'Ước ở hiện tại lùi về Quá khứ đơn (to be dùng were cho mọi ngôi). Ước tương lai dùng would/could + V.';
+      explanation = 'Diễn tả mong muốn một điều gì đó trái ngược với thực tế ở hiện tại hoặc tương lai.';
+    }
+
+    return {
+      originalText: cleanText,
+      type: 'sentence',
+      typeLabel: structureName,
+      vietnameseMeaning: `Ý nghĩa câu: "${cleanText}" (Diễn đạt trọn vẹn một mệnh đề/tình huống).`,
+      detailedExplanation: explanation,
+      grammarBreakdown: `Phân tích: Câu chứa ${words.length} từ. ${hasIf ? 'Có chứa liên từ điều kiện "If".' : ''} ${hasPassive ? 'Chứa cấu trúc bị động be + V3.' : ''}`,
+      examples: [
+        { en: cleanText, vi: 'Câu nguyên văn đang được phân tích trong bài.' },
+        { en: 'Mastering sentence patterns will boost your score significantly.', vi: 'Làm chủ các mẫu câu này sẽ giúp bạn nâng cao điểm số rõ rệt.' }
+      ],
+      examTip: tip,
+      difficultyLevel: 'Chuẩn Vào 10',
+      sourceContext: context || undefined,
+    };
+  }
+
+  // 4. Single word or short phrase heuristic
+  const isAdverb = lower.endsWith('ly') && words.length === 1;
+  const isNoun = (lower.endsWith('tion') || lower.endsWith('ment') || lower.endsWith('ness') || lower.endsWith('ity')) && words.length === 1;
+  const isAdjective = (lower.endsWith('ful') || lower.endsWith('able') || lower.endsWith('ive') || lower.endsWith('ous') || lower.endsWith('al')) && words.length === 1;
+  const isVerbIng = lower.endsWith('ing') && words.length === 1;
+  const isVerbEd = lower.endsWith('ed') && words.length === 1;
+
+  let partOfSpeech = 'Từ vựng (Vocabulary)';
+  let detailNote = 'Một thuật ngữ quan trọng trong hệ thống từ vựng tiếng Anh.';
+
+  if (isAdverb) {
+    partOfSpeech = 'Trạng từ (Adverb)';
+    detailNote = 'Trạng từ bổ nghĩa cho động từ, tính từ hoặc cả câu, thường chỉ cách thức thực hiện hành động.';
+  } else if (isNoun) {
+    partOfSpeech = 'Danh từ (Noun)';
+    detailNote = 'Danh từ chỉ khái niệm, sự vật, hiện tượng hoặc quá trình; thường đứng sau mạo từ (a/an/the) hoặc tính từ sở hữu.';
+  } else if (isAdjective) {
+    partOfSpeech = 'Tính từ (Adjective)';
+    detailNote = 'Tính từ dùng để miêu tả đặc tính, tính chất của danh từ đi sau hoặc đứng sau động từ to be / linking verbs.';
+  } else if (isVerbIng) {
+    partOfSpeech = 'Danh động từ / Hiện tại phân từ (V-ing)';
+    detailNote = 'Có thể đóng vai trò làm chủ ngữ, tân ngữ sau giới từ, hoặc thì tiếp diễn.';
+  } else if (isVerbEd) {
+    partOfSpeech = 'Động từ quá khứ / Phân từ hai (V-ed)';
+    detailNote = 'Dùng trong thì quá khứ đơn, các thì hoàn thành hoặc câu bị động.';
+  }
+
+  return {
+    originalText: cleanText,
+    type: 'word',
+    typeLabel: partOfSpeech,
+    phonetic: `/${lower}/`,
+    vietnameseMeaning: `Từ vựng: "${cleanText}" - ${detailNote}`,
+    detailedExplanation: `Từ "${cleanText}" là một mục từ cốt lõi. Hãy chú ý vị trí đứng trong câu và từ loại đi cùng để chia đúng dạng ngữ pháp (Word Formation).`,
+    grammarBreakdown: `Phân loại từ: ${partOfSpeech}. Nhận diện hình thái từ căn cứ theo hậu tố và ngữ cảnh sử dụng.`,
+    collocations: [`learn ${lower}`, `use ${lower} effectively`, `${lower} in context`],
+    examples: [
+      { en: `It is essential to understand how "${cleanText}" is used in examinations.`, vi: `Hiểu rõ cách dùng "${cleanText}" trong các kỳ thi là điều vô cùng cần thiết.` },
+      { en: `Practice making sentences with "${cleanText}" to remember it longer.`, vi: `Hãy luyện tập đặt câu với "${cleanText}" để ghi nhớ từ vựng lâu hơn.` }
+    ],
+    examTip: 'Trong bài thi vào 10, chú ý dạng bài Cấu Tạo Từ (Word Formation): xác định chỗ trống cần Danh từ, Động từ, Tính từ hay Trạng từ.',
+    difficultyLevel: 'Chuẩn Vào 10',
+    sourceContext: context || undefined,
+  };
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -667,6 +961,117 @@ Hãy trả về kết quả bằng JSON theo schema quy định.`;
       return res.status(500).json({
         error: 'Lỗi sinh đề thi từ AI: ' + (err?.message || 'Không thể xử lý lúc này.'),
       });
+    }
+  });
+
+  // API 6: AI Highlight Word & Sentence Explainer (Tính năng Highlight AI giải nghĩa chữ và câu)
+  app.post('/api/ai-explain-highlight', async (req, res) => {
+    try {
+      const { text, context, unitContext } = req.body;
+      if (!text || typeof text !== 'string' || !text.trim()) {
+        return res.status(400).json({ error: 'Vui lòng cung cấp từ hoặc câu cần highlight giải nghĩa' });
+      }
+
+      const cleanText = text.trim();
+
+      if (!process.env.GEMINI_API_KEY) {
+        return res.json(generateLocalHighlightExplanation(cleanText, context));
+      }
+
+      try {
+        const ai = getGeminiClient();
+        const prompt = `Bạn là Trợ lý AI Bậc Thầy Ngôn Ngữ & Luyện thi Tuyển sinh Lớp 10 THPT môn Tiếng Anh trong game "Egg Thief: Bậc Thầy Trộm Trứng".
+Người học vừa DÙNG TÍNH NĂNG HIGHLIGHT (bôi đen / chọn) một chữ, cụm từ hoặc câu tiếng Anh sau đây:
+"${cleanText}"
+
+Ngữ cảnh xung quanh (nếu có): "${context || 'Trong đề thi / bài học tiếng Anh'}"
+Bối cảnh chuyên đề: "${unitContext || 'Chương trình Tiếng Anh Lớp 8 - Ôn thi vào 10 THPT'}"
+
+NHIỆM VỤ CỦA BẠN:
+Phân tích và giải nghĩa thật chính xác, sư phạm, dễ hiểu và truyền cảm hứng.
+1. Xác định đúng dạng:
+   - 'word': từ đơn lẻ
+   - 'phrase': cụm từ, phrasal verb, collocation
+   - 'idiom': thành ngữ
+   - 'sentence': câu đơn, câu ghép, câu phức
+   - 'grammar_structure': cấu trúc ngữ pháp
+2. Dịch nghĩa tiếng Việt súc tích nhưng chuẩn xác theo ngữ cảnh.
+3. Phiên âm IPA chuẩn quốc tế (nếu là từ/cụm từ).
+4. Phân tích ngữ pháp chi tiết:
+   - Nếu là từ: từ loại (noun, verb, adj, adv...), dạng số nhiều, bất quy tắc, giới từ đi kèm.
+   - Nếu là câu: phân tích cấu trúc chủ ngữ (S), vị ngữ (V), tân ngữ (O), thì (tense), mệnh đề (clause), câu điều kiện/bị động/đảo ngữ nếu có.
+5. Cung cấp 2 ví dụ thực tế song ngữ Anh - Việt.
+6. Từ đồng nghĩa (synonyms), từ trái nghĩa (antonyms), collocations liên quan (nếu có).
+7. Mẹo làm bài thi tuyển sinh vào lớp 10 (examTip): cách nhận biết, tránh bẫy đề thi của Sở GD&ĐT, lỗi học sinh hay sai.
+
+Hãy trả về JSON theo đúng schema quy định.`;
+
+        const response = await callGeminiWithFallback(ai, {
+          contents: prompt,
+          config: {
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                originalText: { type: Type.STRING },
+                type: { type: Type.STRING, description: '"word", "phrase", "idiom", "sentence", or "grammar_structure"' },
+                typeLabel: { type: Type.STRING, description: 'Tên loại tiếng Việt, ví dụ: "Từ vựng (Noun)", "Cụm động từ (Phrasal Verb)", "Cấu trúc đảo ngữ", "Câu điều kiện loại 2"' },
+                phonetic: { type: Type.STRING, description: 'Phiên âm IPA chuẩn' },
+                vietnameseMeaning: { type: Type.STRING, description: 'Nghĩa tiếng Việt chuẩn ngữ cảnh' },
+                detailedExplanation: { type: Type.STRING, description: 'Giải thích chi tiết về nghĩa và cách dùng' },
+                grammarBreakdown: { type: Type.STRING, description: 'Phân tích ngữ pháp, thành phần câu hoặc từ loại' },
+                collocations: {
+                  type: Type.ARRAY,
+                  items: { type: Type.STRING },
+                  description: 'Các cụm từ đi liền hay gặp trong đề thi vào 10'
+                },
+                synonyms: {
+                  type: Type.ARRAY,
+                  items: { type: Type.STRING },
+                  description: '2-4 từ đồng nghĩa'
+                },
+                antonyms: {
+                  type: Type.ARRAY,
+                  items: { type: Type.STRING },
+                  description: '1-3 từ trái nghĩa'
+                },
+                examples: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      en: { type: Type.STRING },
+                      vi: { type: Type.STRING },
+                    },
+                    required: ['en', 'vi'],
+                  },
+                  description: '2 ví dụ câu thực tế kèm dịch'
+                },
+                examTip: { type: Type.STRING, description: 'Mẹo thi tuyển sinh vào 10' },
+                difficultyLevel: { type: Type.STRING, description: 'Độ khó, ví dụ: "Chuẩn Vào 10", "Chuyên Anh"' }
+              },
+              required: ['originalText', 'type', 'typeLabel', 'vietnameseMeaning', 'detailedExplanation', 'examples']
+            }
+          }
+        }, 30000);
+
+        const parsed = JSON.parse(response.text?.trim() || '{}');
+        if (parsed && parsed.vietnameseMeaning) {
+          return res.json({
+            ...parsed,
+            originalText: cleanText,
+            sourceContext: context || undefined,
+          });
+        }
+
+        return res.json(generateLocalHighlightExplanation(cleanText, context));
+      } catch (geminiErr: any) {
+        console.log('[Highlight AI Notice] Gemini fallback to local explanation engine:', geminiErr?.message);
+        return res.json(generateLocalHighlightExplanation(cleanText, context));
+      }
+    } catch (err: any) {
+      console.error('[Highlight Explainer Error]', err);
+      return res.status(500).json({ error: 'Không thể giải nghĩa lúc này' });
     }
   });
 

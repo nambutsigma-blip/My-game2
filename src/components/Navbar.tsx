@@ -1,5 +1,5 @@
 import React from 'react';
-import { HelpCircle, Flame, Egg, Swords, ChevronLeft, ChevronRight, Sparkles, Zap, BookOpen, Globe, Palette, RotateCcw, Edit3, User, Brain, LogIn, Mail, Check, Target } from 'lucide-react';
+import { HelpCircle, Flame, Egg, Swords, ChevronLeft, ChevronRight, Sparkles, Zap, BookOpen, Globe, Palette, RotateCcw, Edit3, User, Brain, LogIn, Mail, Check, Target, Highlighter } from 'lucide-react';
 import { UnitData, StolenEgg } from '../types';
 import { AppUser } from '../utils/authHelper';
 
@@ -27,6 +27,8 @@ interface NavbarProps {
   accountName?: string;
   onOpenSetAccountName?: () => void;
   onOpenAiAssistant?: () => void;
+  onOpenHighlightModal?: () => void;
+  isHighlighterPenActive?: boolean;
   currentUser?: AppUser | null;
   onOpenAuth?: () => void;
   onOpenDailyMissions?: () => void;
@@ -57,6 +59,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   accountName,
   onOpenSetAccountName,
   onOpenAiAssistant,
+  onOpenHighlightModal,
+  isHighlighterPenActive = false,
   currentUser,
   onOpenAuth,
   onOpenDailyMissions,
@@ -252,6 +256,26 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <Brain className="w-3.5 h-3.5 text-pink-200" />
               <span>AI Suy Nghĩ</span>
+            </button>
+          )}
+
+          {/* Highlight AI Explainer Button */}
+          {onOpenHighlightModal && (
+            <button
+              id="nav-highlight-ai-btn"
+              onClick={onOpenHighlightModal}
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-black cursor-pointer transition-all active:scale-95 shadow-sm ${
+                isHighlighterPenActive
+                  ? 'bg-gradient-to-r from-amber-500 to-rose-600 text-slate-950 border-amber-400 ring-2 ring-amber-400/50 shadow-amber-950/60'
+                  : 'bg-gradient-to-r from-amber-950/70 to-slate-900 border-amber-500/50 text-amber-200 hover:border-amber-400'
+              }`}
+              title="Highlight AI - Bôi đen chữ hoặc câu bất kỳ để AI giải nghĩa chi tiết"
+            >
+              <Highlighter className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span className="hidden sm:inline">Highlight AI</span>
+              {isHighlighterPenActive && (
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-950 animate-ping" />
+              )}
             </button>
           )}
 

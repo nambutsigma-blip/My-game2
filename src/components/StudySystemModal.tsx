@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, BookOpen, Volume2, Sparkles, Send, Search, HelpCircle, Layers, CheckCircle2, Brain, ChevronDown, ChevronUp, Lightbulb } from 'lucide-react';
+import { X, BookOpen, Volume2, Sparkles, Send, Search, HelpCircle, Layers, CheckCircle2, Brain, ChevronDown, ChevronUp, Lightbulb, Highlighter } from 'lucide-react';
 import { UnitData, VocabularyItem, GrammarTrapItem } from '../types';
 import { playSuccessChime, playLaser } from '../utils/soundEffects';
 
@@ -8,6 +8,7 @@ interface StudySystemModalProps {
   onClose: () => void;
   currentUnit: UnitData;
   allUnits: UnitData[];
+  onTriggerHighlight?: (text: string, context?: string) => void;
 }
 
 export const StudySystemModal: React.FC<StudySystemModalProps> = ({
@@ -15,6 +16,7 @@ export const StudySystemModal: React.FC<StudySystemModalProps> = ({
   onClose,
   currentUnit,
   allUnits,
+  onTriggerHighlight,
 }) => {
   const [activeTab, setActiveTab] = useState<'vocab' | 'grammar' | 'ai'>('vocab');
   const [searchTerm, setSearchTerm] = useState('');
@@ -245,13 +247,25 @@ export const StudySystemModal: React.FC<StudySystemModalProps> = ({
                           </div>
                           <p className="text-xs font-semibold text-emerald-400 mt-0.5">{v.meaningVi}</p>
                         </div>
-                        <button
-                          onClick={() => speakWord(v.word)}
-                          className="p-2 rounded-xl bg-indigo-950/60 hover:bg-indigo-900 border border-indigo-700/50 text-indigo-300 cursor-pointer transition-all active:scale-95"
-                          title="Nghe phát âm chuẩn"
-                        >
-                          <Volume2 className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {onTriggerHighlight && (
+                            <button
+                              onClick={() => onTriggerHighlight(v.word, v.exampleEn)}
+                              className="p-2 rounded-xl bg-amber-950/60 hover:bg-amber-900 border border-amber-700/50 text-amber-300 cursor-pointer transition-all active:scale-95 flex items-center gap-1 text-[11px] font-bold"
+                              title="Bật Highlight AI giải nghĩa chi tiết"
+                            >
+                              <Highlighter className="w-3.5 h-3.5" />
+                              <span className="hidden sm:inline">Highlight AI</span>
+                            </button>
+                          )}
+                          <button
+                            onClick={() => speakWord(v.word)}
+                            className="p-2 rounded-xl bg-indigo-950/60 hover:bg-indigo-900 border border-indigo-700/50 text-indigo-300 cursor-pointer transition-all active:scale-95"
+                            title="Nghe phát âm chuẩn"
+                          >
+                            <Volume2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
 
                       <div className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 text-[11px] space-y-1">
@@ -290,11 +304,23 @@ export const StudySystemModal: React.FC<StudySystemModalProps> = ({
                       key={g.id || index}
                       className="p-4 rounded-2xl bg-slate-950 border border-slate-800 hover:border-indigo-500/50 transition-all space-y-3"
                     >
-                      <div className="flex items-center gap-2">
-                        <span className="w-6 h-6 rounded-lg bg-indigo-600/30 text-indigo-300 font-bold text-xs flex items-center justify-center border border-indigo-500/40">
-                          {index + 1}
-                        </span>
-                        <h4 className="font-bold text-sm text-white">{g.instruction}</h4>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="w-6 h-6 rounded-lg bg-indigo-600/30 text-indigo-300 font-bold text-xs flex items-center justify-center border border-indigo-500/40">
+                            {index + 1}
+                          </span>
+                          <h4 className="font-bold text-sm text-white">{g.instruction}</h4>
+                        </div>
+                        {onTriggerHighlight && (
+                          <button
+                            onClick={() => onTriggerHighlight(g.sentencePrompt, g.grammarRuleExplaining)}
+                            className="px-2.5 py-1 rounded-xl bg-amber-950/60 hover:bg-amber-900 border border-amber-700/50 text-amber-300 cursor-pointer transition-all active:scale-95 flex items-center gap-1 text-[11px] font-bold shrink-0"
+                            title="Bật Highlight AI giải nghĩa câu này"
+                          >
+                            <Highlighter className="w-3.5 h-3.5" />
+                            <span>Highlight AI</span>
+                          </button>
+                        )}
                       </div>
 
                       <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 text-xs font-mono text-amber-300">

@@ -33,6 +33,9 @@ import { AiThinkingAssistantModal } from './components/AiThinkingAssistantModal'
 import { AuthModal } from './components/AuthModal';
 import { DailyMissionModal } from './components/DailyMissionModal';
 import { DailyMissionBanner } from './components/DailyMissionBanner';
+import { AiHighlightModal } from './components/AiHighlightModal';
+import { HighlightTextDetector } from './components/HighlightTextDetector';
+import { HighlightColor } from './types';
 import { getDailyMissionData } from './utils/dailyMissionManager';
 import { auth, onAuthStateChanged, signOut, updateProfile, User, db, collection, getDocs, doc, setDoc, deleteDoc, serverTimestamp } from './lib/firebase';
 import { AppUser, getStoredUser } from './utils/authHelper';
@@ -213,6 +216,41 @@ export default function App() {
   const [selectedAppearancePetId, setSelectedAppearancePetId] = useState<string | null>(null);
   const [isPokemonPvPOpen, setIsPokemonPvPOpen] = useState(false);
   const [pendingGiftsCount, setPendingGiftsCount] = useState(0);
+
+  // Highlight AI Word & Sentence Explainer State
+  const [isHighlightModalOpen, setIsHighlightModalOpen] = useState(false);
+  const [highlightText, setHighlightText] = useState('');
+  const [highlightContext, setHighlightContext] = useState('');
+  const [isHighlighterPenActive, setIsHighlighterPenActive] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('egg_thief_highlighter_pen_active') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [highlightColor, setHighlightColor] = useState<HighlightColor>('yellow');
+  const [savedHighlightsCount, setSavedHighlightsCount] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('egg_thief_saved_highlights');
+      return saved ? JSON.parse(saved).length : 0;
+    } catch {
+      return 0;
+    }
+  });
+  const [aiAssistantInitialPrompt, setAiAssistantInitialPrompt] = useState<string>('');
+
+  const handleTriggerHighlight = (text: string, context?: string) => {
+    setHighlightText(text);
+    setHighlightContext(context || '');
+    setIsHighlightModalOpen(true);
+  };
+
+  const handleToggleHighlighterPen = (active: boolean) => {
+    setIsHighlighterPenActive(active);
+    try {
+      localStorage.setItem('egg_thief_highlighter_pen_active', String(active));
+    } catch {}
+  };
 
   // Daily Mission System State
   const [isDailyMissionOpen, setIsDailyMissionOpen] = useState(false);
@@ -943,7 +981,7 @@ export default function App() {
   const activePerksCount = (Object.values(skillTreeState) as number[]).reduce((acc, lvl) => acc + (lvl || 0), 0);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-amber-500 selection:text-slate-950">
+    <div className={`min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-amber-500 selection:text-slate-950 ${isHighlighterPenActive ? 'highlighter-pen-active' : ''}`}>
       {/* Top Navigation */}
       <Navbar
         units={UNITS_DATA}
@@ -972,6 +1010,8 @@ export default function App() {
         accountName={accountName}
         onOpenSetAccountName={() => setIsSetAccountNameOpen(true)}
         onOpenAiAssistant={() => setIsAiAssistantOpen(true)}
+        onOpenHighlightModal={() => setIsHighlightModalOpen(true)}
+        isHighlighterPenActive={isHighlighterPenActive}
         currentUser={currentUser as AppUser | null}
         onOpenAuth={() => setIsAuthModalOpen(true)}
         onOpenDailyMissions={() => setIsDailyMissionOpen(true)}
@@ -1183,6 +1223,7 @@ export default function App() {
             examTitle={activeExamPaper?.examTitle}
             examCode={activeExamPaper?.examCode}
             isAiGenerated={activeExamPaper?.isAiGenerated}
+            onTriggerHighlight={handleTriggerHighlight}
           />
         ) : activeStage === 'stage2_grammar' ? (
           <Stage2GrammarTrap
@@ -1198,6 +1239,7 @@ export default function App() {
             examTitle={activeExamPaper?.examTitle}
             examCode={activeExamPaper?.examCode}
             isAiGenerated={activeExamPaper?.isAiGenerated}
+            onTriggerHighlight={handleTriggerHighlight}
           />
         ) : (
           <Stage3VoiceCode
@@ -1208,6 +1250,7 @@ export default function App() {
             onEggStolenSuccess={handleEggStolenSuccess}
             examTitle={activeExamPaper?.examTitle}
             examCode={activeExamPaper?.examCode}
+            onTriggerHighlight={handleTriggerHighlight}
           />
         )}
       </main>
@@ -1310,6 +1353,7 @@ export default function App() {
         onClose={() => setIsStudyOpen(false)}
         currentUnit={currentUnit}
         allUnits={UNITS_DATA}
+        onTriggerHighlight={handleTriggerHighlight}
       />
 
       <OnlineMultiplayerModal
@@ -1433,8 +1477,37 @@ export default function App() {
       {/* Thinking AI Assistant Modal (Gemini 3.8 Flash, Suy nghĩ độc lập, Không hardcode) */}
       <AiThinkingAssistantModal
         isOpen={isAiAssistantOpen}
-        onClose={() => setIsAiAssistantOpen(false)}
+        onClose={() => {
+          setIsAiAssistantOpen(false);
+          setAiAssistantInitialPrompt('');
+        }}
         currentUnitTitle={currentUnit.title}
+        initialQuestion={aiAssistantInitialPrompt}
+      />
+
+      {/* Global Highlight Text Selection Detector & Floating Pen Tool */}
+      <HighlightTextDetector
+        onTriggerHighlight={handleTriggerHighlight}
+        isHighlighterPenActive={isHighlighterPenActive}
+        onToggleHighlighterPen={handleToggleHighlighterPen}
+        highlightColor={highlightColor}
+        onChangeHighlightColor={setHighlightColor}
+        onOpenNotebook={() => setIsHighlightModalOpen(true)}
+        unitContext={currentUnit.title}
+        savedCount={savedHighlightsCount}
+      />
+
+      {/* AI Highlight Modal (Bậc Thầy Giải Nghĩa Từ & Câu với Gemini AI) */}
+      <AiHighlightModal
+        isOpen={isHighlightModalOpen}
+        onClose={() => setIsHighlightModalOpen(false)}
+        initialText={highlightText}
+        contextSentence={highlightContext}
+        unitContext={currentUnit.title}
+        onOpenAiThinkingAssistant={(prompt) => {
+          setAiAssistantInitialPrompt(prompt || '');
+          setIsAiAssistantOpen(true);
+        }}
       />
 
       {/* Floating AI Assistant Quick Trigger */}

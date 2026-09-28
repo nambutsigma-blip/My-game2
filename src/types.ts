@@ -447,3 +447,36 @@ export interface BattleHistoryRecord {
   badgeIcon?: string;
   turnsCount: number;
 }
+
+export type HighlightColor = 'yellow' | 'green' | 'pink' | 'purple' | 'cyan';
+
+export interface AiHighlightResult {
+  originalText: string;
+  type: 'word' | 'phrase' | 'idiom' | 'sentence' | 'grammar_structure';
+  typeLabel: string; // e.g. "Từ vựng (Noun)", "Cụm động từ (Phrasal Verb)", "Mẫu câu đảo ngữ"
+  phonetic?: string; // e.g. "/prəˌnʌn.siˈeɪ.ʃən/"
+  vietnameseMeaning: string; // Nghĩa tiếng Việt chuẩn ngữ cảnh
+  detailedExplanation: string; // Giải thích chi tiết, nguồn gốc, sắc thái
+  grammarBreakdown?: string; // Phân tích thành phần câu / loại từ
+  collocations?: string[]; // Các cụm từ liên quan hay gặp trong đề thi vào 10
+  synonyms?: string[]; // Từ đồng nghĩa
+  antonyms?: string[]; // Từ trái nghĩa
+  examples: { en: string; vi: string }[]; // Ví dụ song ngữ
+  examTip?: string; // Mẹo thi vào 10
+  difficultyLevel?: string;
+  sourceContext?: string;
+}
+
+export interface SavedHighlightItem {
+  id: string;
+  text: string;
+  vietnameseMeaning: string;
+  phonetic?: string;
+  typeLabel: string;
+  createdAt: number;
+  unitContext?: string;
+  color: HighlightColor;
+  notes?: string;
+  examples?: { en: string; vi: string }[];
+  examTip?: string;
+}

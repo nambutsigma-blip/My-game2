@@ -34,6 +34,7 @@ interface AiThinkingAssistantModalProps {
   isOpen: boolean;
   onClose: () => void;
   currentUnitTitle?: string;
+  initialQuestion?: string;
 }
 
 const QUICK_PROMPTS = [
@@ -49,6 +50,7 @@ export const AiThinkingAssistantModal: React.FC<AiThinkingAssistantModalProps> =
   isOpen,
   onClose,
   currentUnitTitle = 'Tiếng Anh Lớp 8 & Vào 10',
+  initialQuestion,
 }) => {
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -100,6 +102,12 @@ export const AiThinkingAssistantModal: React.FC<AiThinkingAssistantModalProps> =
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages, isOpen, isLoading]);
+
+  useEffect(() => {
+    if (isOpen && initialQuestion) {
+      setInput(initialQuestion);
+    }
+  }, [isOpen, initialQuestion]);
 
   if (!isOpen) return null;
 

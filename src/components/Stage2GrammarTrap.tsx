@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Zap, Clock, ShieldCheck, AlertCircle, Sparkles, ArrowRight, CheckCircle, RotateCcw } from 'lucide-react';
+import { Zap, Clock, ShieldCheck, AlertCircle, Sparkles, ArrowRight, CheckCircle, RotateCcw, Highlighter } from 'lucide-react';
 import { GrammarTrapItem } from '../types';
 import { playBootsBonus, playStealthStep, playLaser, playAlertUp } from '../utils/soundEffects';
 
@@ -12,6 +12,7 @@ interface Stage2GrammarTrapProps {
   examTitle?: string;
   examCode?: string;
   isAiGenerated?: boolean;
+  onTriggerHighlight?: (text: string, context?: string) => void;
 }
 
 export const Stage2GrammarTrap: React.FC<Stage2GrammarTrapProps> = ({
@@ -23,6 +24,7 @@ export const Stage2GrammarTrap: React.FC<Stage2GrammarTrapProps> = ({
   examTitle,
   examCode,
   isAiGenerated,
+  onTriggerHighlight,
 }) => {
   const [currentTrapIdx, setCurrentTrapIdx] = useState(0);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
@@ -211,15 +213,27 @@ export const Stage2GrammarTrap: React.FC<Stage2GrammarTrapProps> = ({
 
         {/* Sentence Prompt in Wire Frame */}
         <div className="bg-slate-950 border-2 border-indigo-900/60 rounded-2xl p-5 mb-5 relative overflow-hidden">
-          <div className="text-xs text-indigo-300 font-mono uppercase tracking-wider mb-2 flex items-center justify-between">
+          <div className="text-xs text-indigo-300 font-mono uppercase tracking-wider mb-2 flex items-center justify-between flex-wrap gap-2">
             <span className="flex items-center gap-1.5">
               <span>⚡ Ngữ Cảnh Bẫy Ngữ Pháp (Acoustic Tripwire)</span>
             </span>
-            {isAiGenerated && (
-              <span className="text-[10px] text-amber-400 bg-amber-950/60 border border-amber-800/60 px-2 py-0.5 rounded-md font-bold">
-                ✨ AI Generated • Unique
-              </span>
-            )}
+            <div className="flex items-center gap-2">
+              {onTriggerHighlight && (
+                <button
+                  onClick={() => onTriggerHighlight(currentTrap.sentencePrompt, currentTrap.instruction)}
+                  className="flex items-center gap-1 text-[11px] font-bold text-amber-300 hover:text-amber-200 bg-amber-950/70 hover:bg-amber-900 border border-amber-600/50 px-2 py-0.5 rounded-lg transition-colors cursor-pointer"
+                  title="Bật Highlight AI giải nghĩa câu bẫy này"
+                >
+                  <Highlighter className="w-3 h-3" />
+                  <span>Highlight AI</span>
+                </button>
+              )}
+              {isAiGenerated && (
+                <span className="text-[10px] text-amber-400 bg-amber-950/60 border border-amber-800/60 px-2 py-0.5 rounded-md font-bold">
+                  ✨ AI Generated • Unique
+                </span>
+              )}
+            </div>
           </div>
           <p className="text-lg md:text-xl font-bold text-white leading-relaxed">
             {currentTrap.sentencePrompt}

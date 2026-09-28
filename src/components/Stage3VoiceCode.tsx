@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, MicOff, Volume2, Sparkles, AlertTriangle, CheckCircle, Shield, Award, HelpCircle, ArrowRight, MessageSquare, Flame, Clock, RefreshCw, Send, Check } from 'lucide-react';
+import { Mic, MicOff, Volume2, Sparkles, AlertTriangle, CheckCircle, Shield, Award, HelpCircle, ArrowRight, MessageSquare, Flame, Clock, RefreshCw, Send, Check, Highlighter } from 'lucide-react';
 import { SpeakingCipher, SpeechAnalysisResult, WordScore } from '../types';
 import { speakEnglish, playStealthStep, playLaser, playAlertUp, playSuccessChime } from '../utils/soundEffects';
 
@@ -11,6 +11,7 @@ interface Stage3VoiceCodeProps {
   onEggStolenSuccess: (score: number) => void;
   examTitle?: string;
   examCode?: string;
+  onTriggerHighlight?: (text: string, context?: string) => void;
 }
 
 // Client-side fallback analyzer if backend is unreachable or latency occurs
@@ -95,6 +96,7 @@ export const Stage3VoiceCode: React.FC<Stage3VoiceCodeProps> = ({
   onEggStolenSuccess,
   examTitle,
   examCode,
+  onTriggerHighlight,
 }) => {
   const [activeSubMode, setActiveSubMode] = useState<'cage_cipher' | 'dragon_challenge'>('cage_cipher');
 
@@ -473,13 +475,25 @@ export const Stage3VoiceCode: React.FC<Stage3VoiceCodeProps> = ({
                 <Sparkles className="w-3.5 h-3.5 text-amber-400" />
                 <span>Mật Mã Cần Đọc (Target Voice Cipher):</span>
               </span>
-              <button
-                onClick={() => speakEnglish(speakingCipher.targetPhrase)}
-                className="flex items-center gap-1.5 text-xs text-rose-300 hover:text-rose-200 bg-rose-950/40 px-3 py-1.5 rounded-xl border border-rose-800/40 cursor-pointer transition-all active:scale-95"
-              >
-                <Volume2 className="w-4 h-4" />
-                <span>Nghe Giọng Đọc Mẫu Chuẩn</span>
-              </button>
+              <div className="flex items-center gap-2">
+                {onTriggerHighlight && (
+                  <button
+                    onClick={() => onTriggerHighlight(speakingCipher.targetPhrase, speakingCipher.expectedGrammarRule)}
+                    className="flex items-center gap-1.5 text-xs text-amber-300 hover:text-amber-200 bg-amber-950/60 hover:bg-amber-900 px-3 py-1.5 rounded-xl border border-amber-600/50 cursor-pointer transition-all active:scale-95"
+                    title="Bật Highlight AI giải nghĩa câu mật mã này"
+                  >
+                    <Highlighter className="w-3.5 h-3.5" />
+                    <span>Highlight AI</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => speakEnglish(speakingCipher.targetPhrase)}
+                  className="flex items-center gap-1.5 text-xs text-rose-300 hover:text-rose-200 bg-rose-950/40 px-3 py-1.5 rounded-xl border border-rose-800/40 cursor-pointer transition-all active:scale-95"
+                >
+                  <Volume2 className="w-4 h-4" />
+                  <span>Nghe Giọng Đọc Mẫu Chuẩn</span>
+                </button>
+              </div>
             </div>
 
             <p className="text-xl md:text-2xl font-black text-white tracking-wide">
