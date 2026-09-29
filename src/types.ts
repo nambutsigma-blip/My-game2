@@ -516,6 +516,7 @@ export interface ConversationMessage {
   audioDurationSeconds?: number;
   timestamp: number;
   vietnameseSub?: string; // Dịch phụ đề tiếng Việt
+  suggestedReplies?: string[]; // 2-3 gợi ý câu phản hồi nhanh
   corrections?: ConversationGrammarCorrection[]; // Phân tích lỗi ngữ pháp cho câu này
   praise?: string; // Lời khen nếu câu chuẩn
   grammarScore?: number; // Điểm ngữ pháp câu /10
