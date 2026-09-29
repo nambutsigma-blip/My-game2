@@ -20,6 +20,9 @@ service cloud.firestore {
     match /gifts/{giftId} {
       allow read, write: if true;
     }
+    match /conversations/{convId} {
+      allow read, write: if true;
+    }
   }
 }
 

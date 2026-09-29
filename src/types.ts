@@ -480,3 +480,73 @@ export interface SavedHighlightItem {
   examples?: { en: string; vi: string }[];
   examTip?: string;
 }
+
+// 🌍 Native Speaker / Foreigner AI Conversation Types
+export interface ForeignPersona {
+  id: string;
+  name: string;
+  avatar: string; // Emoji avatar or avatar icon
+  nationality: string; // e.g. "Hoa Kỳ (USA)", "Vương Quốc Anh (UK)", "Úc (Australia)", "Canada", "Singapore"
+  countryCode: string; // 'US' | 'GB' | 'AU' | 'CA' | 'SG'
+  voiceLang: string; // 'en-US' | 'en-GB' | 'en-AU' | 'en-CA'
+  accentName: string; // e.g. "American Accent", "British RP Accent", "Australian Accent"
+  roleTitle: string; // e.g. "Sinh viên Đại học Stanford & Gamer", "Giáo viên Văn học London"
+  personality: string; // e.g. "Nhiệt tình, hài hước, thân thiện, dùng nhiều tiếng lóng tự nhiên"
+  targetLevel: 'A2' | 'B1' | 'B2' | 'C1';
+  topic: string; // e.g. "Cuộc sống học đường & Sở thích", "Luyện phỏng vấn", "Du lịch & Ẩm thực"
+  greeting: string; // Opening line generated dynamically by AI
+  isAiCustom?: boolean;
+}
+
+export interface ConversationGrammarCorrection {
+  originalSnippet: string; // Câu hoặc cụm từ học sinh nói có lỗi
+  correctedSnippet: string; // Câu chuẩn người bản xứ nói
+  errorType: string; // "Sai thì động từ", "Giới từ chưa chuẩn", "Hòa hợp chủ vị", "Diễn đạt gượng gạo (Vietnamese thinking)", "Thiếu mạo từ"
+  explanationVi: string; // Giải thích chi tiết vì sao sai bằng tiếng Việt
+  naturalAlternative: string; // Cách nói tự nhiên hơn của người bản xứ
+  memoryTip: string; // Mẹo nhớ nhanh để không lặp lại lỗi
+}
+
+export interface ConversationMessage {
+  id: string;
+  sender: 'user' | 'foreign_ai';
+  text: string;
+  audioBlobUrl?: string; // Recorded audio blob URL for playback
+  audioDataUrl?: string; // Base64 data for persistence
+  audioDurationSeconds?: number;
+  timestamp: number;
+  vietnameseSub?: string; // Dịch phụ đề tiếng Việt
+  corrections?: ConversationGrammarCorrection[]; // Phân tích lỗi ngữ pháp cho câu này
+  praise?: string; // Lời khen nếu câu chuẩn
+  grammarScore?: number; // Điểm ngữ pháp câu /10
+}
+
+export interface SavedConversationSession {
+  id: string;
+  userId?: string;
+  persona: ForeignPersona;
+  topic: string;
+  createdAt: number;
+  dateFormatted: string;
+  messagesCount: number;
+  messages: {
+    id: string;
+    sender: 'user' | 'foreign_ai';
+    text: string;
+    vietnameseSub?: string;
+    audioDataUrl?: string;
+    corrections?: ConversationGrammarCorrection[];
+    praise?: string;
+    grammarScore?: number;
+    timestamp: number;
+  }[];
+  overallReview?: {
+    fluencyScore: number;
+    grammarScore: number;
+    vocabularyScore: number;
+    overallFeedback: string;
+    keyGrammarMistakes: ConversationGrammarCorrection[];
+    actionableRoadmap: string[]; // Hướng điều chỉnh cụ thể để tiến bộ
+  };
+}
+

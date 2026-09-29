@@ -118,6 +118,21 @@
           "description": "pending or claimed"
         }
       }
+    },
+    "ConversationSession": {
+      "title": "ConversationSession",
+      "description": "Saved conversation sessions with AI native speakers including audio recordings and grammar corrections",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "personaName": { "type": "string" },
+        "nationality": { "type": "string" },
+        "topic": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "messagesCount": { "type": "number" },
+        "grammarScore": { "type": "number" },
+        "fluencyScore": { "type": "number" }
+      }
     }
   },
   "firestore": {
@@ -140,6 +155,10 @@
     "/gifts/{giftId}": {
       "schema": "Gift",
       "description": "Universal gifts and donations for online and offline players"
+    },
+    "/conversations/{convId}": {
+      "schema": "ConversationSession",
+      "description": "Saved native speaker conversations with audio recordings and grammar analysis"
     }
   }
 }

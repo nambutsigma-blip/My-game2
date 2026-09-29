@@ -29,6 +29,7 @@ interface NavbarProps {
   onOpenAiAssistant?: () => void;
   onOpenHighlightModal?: () => void;
   isHighlighterPenActive?: boolean;
+  onOpenForeignConversation?: () => void;
   currentUser?: AppUser | null;
   onOpenAuth?: () => void;
   onOpenDailyMissions?: () => void;
@@ -61,6 +62,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenAiAssistant,
   onOpenHighlightModal,
   isHighlighterPenActive = false,
+  onOpenForeignConversation,
   currentUser,
   onOpenAuth,
   onOpenDailyMissions,
@@ -276,6 +278,20 @@ export const Navbar: React.FC<NavbarProps> = ({
               {isHighlighterPenActive && (
                 <span className="w-1.5 h-1.5 rounded-full bg-slate-950 animate-ping" />
               )}
+            </button>
+          )}
+
+          {/* AI Native Speaker Conversation Button */}
+          {onOpenForeignConversation && (
+            <button
+              id="nav-foreign-conversation-btn"
+              onClick={onOpenForeignConversation}
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 hover:from-cyan-500 hover:to-blue-500 text-white font-black text-xs cursor-pointer transition-all active:scale-95 shadow-md shadow-cyan-950/80 group"
+              title="Trò chuyện trực tiếp cùng Người Nước Ngoài do AI tạo (Ghi âm, lưu trữ & phân tích lỗi ngữ pháp)"
+            >
+              <Globe className="w-3.5 h-3.5 text-cyan-200 group-hover:rotate-12 transition-transform" />
+              <span>Nói Với Người Bản Xứ</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-300 animate-ping" />
             </button>
           )}
 

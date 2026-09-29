@@ -758,11 +758,9 @@ export const HighlightTextDetector: React.FC<HighlightTextDetectorProps> = ({
             left: `${popover.x}px`,
             top: `${popover.y}px`,
             zIndex: 99999,
-          }}
-          className="w-[340px] max-w-[calc(100vw-24px)] rounded-2xl bg-slate-950/95 border-2 border-slate-700/80 shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150 text-slate-100 select-text p-3.5 space-y-2.5 transition-all"
-          style-extra={{
             boxShadow: `0 12px 36px -4px rgba(0, 0, 0, 0.8), 0 0 20px ${currentColorConfig.glow}`,
           }}
+          className="w-[340px] max-w-[calc(100vw-24px)] rounded-2xl bg-slate-950/95 border-2 border-slate-700/80 shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150 text-slate-100 select-text p-3.5 space-y-2.5 transition-all"
         >
           {/* Header Row: Highlight Icon + Term + Audio + Close Button */}
           <div className="flex items-center justify-between gap-2 border-b border-slate-800/80 pb-2">

@@ -35,6 +35,7 @@ import { DailyMissionModal } from './components/DailyMissionModal';
 import { DailyMissionBanner } from './components/DailyMissionBanner';
 import { AiHighlightModal } from './components/AiHighlightModal';
 import { HighlightTextDetector } from './components/HighlightTextDetector';
+import { AiForeignConversationModal } from './components/AiForeignConversationModal';
 import { HighlightColor } from './types';
 import { getDailyMissionData } from './utils/dailyMissionManager';
 import { auth, onAuthStateChanged, signOut, updateProfile, User, db, collection, getDocs, doc, setDoc, deleteDoc, serverTimestamp } from './lib/firebase';
@@ -238,6 +239,7 @@ export default function App() {
     }
   });
   const [aiAssistantInitialPrompt, setAiAssistantInitialPrompt] = useState<string>('');
+  const [isForeignConversationOpen, setIsForeignConversationOpen] = useState(false);
 
   const handleTriggerHighlight = (text: string, context?: string) => {
     setHighlightText(text);
@@ -1012,6 +1014,7 @@ export default function App() {
         onOpenAiAssistant={() => setIsAiAssistantOpen(true)}
         onOpenHighlightModal={() => setIsHighlightModalOpen(true)}
         isHighlighterPenActive={isHighlighterPenActive}
+        onOpenForeignConversation={() => setIsForeignConversationOpen(true)}
         currentUser={currentUser as AppUser | null}
         onOpenAuth={() => setIsAuthModalOpen(true)}
         onOpenDailyMissions={() => setIsDailyMissionOpen(true)}
@@ -1251,6 +1254,7 @@ export default function App() {
             examTitle={activeExamPaper?.examTitle}
             examCode={activeExamPaper?.examCode}
             onTriggerHighlight={handleTriggerHighlight}
+            onOpenForeignConversation={() => setIsForeignConversationOpen(true)}
           />
         )}
       </main>
@@ -1508,6 +1512,13 @@ export default function App() {
           setAiAssistantInitialPrompt(prompt || '');
           setIsAiAssistantOpen(true);
         }}
+      />
+
+      {/* AI Native Speaker Foreigner Conversation & Voice Recording Modal */}
+      <AiForeignConversationModal
+        isOpen={isForeignConversationOpen}
+        onClose={() => setIsForeignConversationOpen(false)}
+        unitContext={currentUnit.title}
       />
 
       {/* Floating AI Assistant Quick Trigger */}

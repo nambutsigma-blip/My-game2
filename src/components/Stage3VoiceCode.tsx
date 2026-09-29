@@ -12,6 +12,7 @@ interface Stage3VoiceCodeProps {
   examTitle?: string;
   examCode?: string;
   onTriggerHighlight?: (text: string, context?: string) => void;
+  onOpenForeignConversation?: () => void;
 }
 
 // Client-side fallback analyzer if backend is unreachable or latency occurs
@@ -97,6 +98,7 @@ export const Stage3VoiceCode: React.FC<Stage3VoiceCodeProps> = ({
   examTitle,
   examCode,
   onTriggerHighlight,
+  onOpenForeignConversation,
 }) => {
   const [activeSubMode, setActiveSubMode] = useState<'cage_cipher' | 'dragon_challenge'>('cage_cipher');
 
@@ -400,6 +402,17 @@ export const Stage3VoiceCode: React.FC<Stage3VoiceCodeProps> = ({
               <span>2. 1-on-1 Dragon Duel</span>
               <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
             </button>
+
+            {onOpenForeignConversation && (
+              <button
+                onClick={onOpenForeignConversation}
+                className="px-3.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white shadow-md ml-1"
+                title="Mở phòng đàm thoại cùng Người Nước Ngoài do AI tạo (Thu âm, lưu trữ & phân tích lỗi ngữ pháp)"
+              >
+                <span>🌍 Nói Với Người Bản Xứ</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-300 animate-ping" />
+              </button>
+            )}
           </div>
         </div>
 
