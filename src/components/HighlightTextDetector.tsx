@@ -138,6 +138,22 @@ const INSTANT_CLIENT_DICT: Record<
     exampleEn: 'The view from the mountain peak was breathtaking.',
     exampleVi: 'Khung cảnh nhìn từ đỉnh núi đẹp đến nghẹt thở.',
   },
+  'fast asleep': {
+    type: 'phrase',
+    typeLabel: 'Cụm tính từ (Collocation)',
+    phonetic: '/ˌfæst əˈsliːp/',
+    meaningVi: 'Ngủ say, ngủ sâu giấc, chìm vào giấc ngủ say',
+    exampleEn: 'The children were fast asleep after an exciting day.',
+    exampleVi: 'Lũ trẻ đã ngủ rất say sau một ngày vui chơi thú vị.',
+  },
+  asleep: {
+    type: 'word',
+    typeLabel: 'Tính từ (Adjective - Predicate only)',
+    phonetic: '/əˈsliːp/',
+    meaningVi: 'Đang ngủ, trong trạng thái ngủ',
+    exampleEn: 'The baby has finally fallen asleep.',
+    exampleVi: 'Em bé cuối cùng đã ngủ thiếp đi.',
+  },
   destination: {
     type: 'word',
     typeLabel: 'Danh từ (Noun)',
@@ -583,7 +599,12 @@ export const HighlightTextDetector: React.FC<HighlightTextDetectorProps> = ({
 
   // Fetch or lookup meaning immediately
   const fetchInstantMeaning = async (text: string, context?: string) => {
-    const cleanKey = text.toLowerCase().trim();
+    const rawClean = text.trim();
+    // Clean out wrapping quotation marks or trailing punctuation for dictionary key
+    const cleanKey = rawClean
+      .toLowerCase()
+      .replace(/^[\s“"‘'(\[]+|[\s”"’')\].,;:!?]+$/g, '')
+      .trim();
     setIsCopied(false);
 
     // 1. Check in-memory cache for 0ms response
@@ -599,7 +620,7 @@ export const HighlightTextDetector: React.FC<HighlightTextDetectorProps> = ({
     if (INSTANT_CLIENT_DICT[cleanKey]) {
       const dictItem = INSTANT_CLIENT_DICT[cleanKey];
       const instantRes: AiHighlightResult = {
-        originalText: text,
+        originalText: rawClean,
         type: dictItem.type,
         typeLabel: dictItem.typeLabel,
         phonetic: dictItem.phonetic,
@@ -612,8 +633,30 @@ export const HighlightTextDetector: React.FC<HighlightTextDetectorProps> = ({
       setMeaningResult(instantRes);
       cacheRef.current.set(cleanKey, instantRes);
       setIsLoadingMeaning(false);
-      checkIfSaved(text);
+      checkIfSaved(rawClean);
       return;
+    }
+
+    // Also check multi-word phrase matches in client dict
+    for (const [key, dictItem] of Object.entries(INSTANT_CLIENT_DICT)) {
+      if (key.includes(' ') && (cleanKey === key || cleanKey.includes(key))) {
+        const instantRes: AiHighlightResult = {
+          originalText: rawClean,
+          type: dictItem.type,
+          typeLabel: dictItem.typeLabel,
+          phonetic: dictItem.phonetic,
+          vietnameseMeaning: dictItem.meaningVi,
+          detailedExplanation: dictItem.meaningVi,
+          examples: dictItem.exampleEn
+            ? [{ en: dictItem.exampleEn, vi: dictItem.exampleVi || '' }]
+            : [],
+        };
+        setMeaningResult(instantRes);
+        cacheRef.current.set(cleanKey, instantRes);
+        setIsLoadingMeaning(false);
+        checkIfSaved(rawClean);
+        return;
+      }
     }
 
     // 3. Request AI server endpoint for full dynamic analysis
@@ -621,32 +664,56 @@ export const HighlightTextDetector: React.FC<HighlightTextDetectorProps> = ({
     setMeaningResult(null);
 
     try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 9000);
+
       const res = await fetch('/api/ai-explain-highlight', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          text,
+          text: rawClean,
           context,
           unitContext,
         }),
+        signal: controller.signal,
       });
 
-      if (!res.ok) {
-        throw new Error('API failed');
+      clearTimeout(timer);
+
+      let data: any = null;
+      try {
+        const rawBody = await res.text();
+        if (rawBody && rawBody.trim()) {
+          try {
+            data = JSON.parse(rawBody.trim());
+          } catch {
+            // In case of any wrapping or non-json
+            const firstBrace = rawBody.indexOf('{');
+            const lastBrace = rawBody.lastIndexOf('}');
+            if (firstBrace !== -1 && lastBrace > firstBrace) {
+              data = JSON.parse(rawBody.substring(firstBrace, lastBrace + 1));
+            }
+          }
+        }
+      } catch (parseErr) {
+        console.warn('Highlight response parse notice:', parseErr);
       }
 
-      const data = await res.json();
+      if (!data || (!res.ok && data.error)) {
+        throw new Error(data?.error || 'API failed');
+      }
+
       const finalResult: AiHighlightResult = {
-        originalText: data.originalText || text,
-        type: data.type || 'word',
-        typeLabel: data.typeLabel || 'Từ vựng (Vocabulary)',
+        originalText: data.originalText || rawClean,
+        type: data.type || (cleanKey.includes(' ') ? 'phrase' : 'word'),
+        typeLabel: data.typeLabel || (cleanKey.includes(' ') ? 'Cụm từ tiếng Anh' : 'Từ vựng tiếng Anh'),
         phonetic: data.phonetic,
-        vietnameseMeaning: data.vietnameseMeaning || data.meaningVi || 'Đang cập nhật nghĩa...',
+        vietnameseMeaning: data.vietnameseMeaning || data.meaningVi || `Nghĩa: "${rawClean}"`,
         detailedExplanation: data.detailedExplanation || data.vietnameseMeaning || '',
         grammarBreakdown: data.grammarBreakdown,
-        collocations: data.collocations,
-        synonyms: data.synonyms,
-        antonyms: data.antonyms,
+        collocations: Array.isArray(data.collocations) ? data.collocations : undefined,
+        synonyms: Array.isArray(data.synonyms) ? data.synonyms : undefined,
+        antonyms: Array.isArray(data.antonyms) ? data.antonyms : undefined,
         examples: Array.isArray(data.examples) ? data.examples : [],
         examTip: data.examTip,
         difficultyLevel: data.difficultyLevel,
@@ -657,13 +724,14 @@ export const HighlightTextDetector: React.FC<HighlightTextDetectorProps> = ({
       cacheRef.current.set(cleanKey, finalResult);
       checkIfSaved(finalResult.originalText);
     } catch {
-      // Fallback display if network issue
+      // Graceful fallback display if network issue or offline
+      const wordsCount = cleanKey.split(/\s+/).filter(Boolean).length;
       const fallback: AiHighlightResult = {
-        originalText: text,
-        type: 'word',
-        typeLabel: 'Từ vựng tiếng Anh',
-        vietnameseMeaning: `Thuật ngữ: "${text}"`,
-        detailedExplanation: `Bạn có thể bấm "Xem chi tiết" để AI phân tích cấu trúc sâu hơn.`,
+        originalText: rawClean,
+        type: wordsCount >= 2 ? 'phrase' : 'word',
+        typeLabel: wordsCount >= 2 ? 'Cụm từ tiếng Anh' : 'Từ vựng tiếng Anh',
+        vietnameseMeaning: `Cụm từ / Từ vựng: "${rawClean}"`,
+        detailedExplanation: `Bạn có thể bấm "Phân tích sâu" để xem chi tiết mẹo thi tuyển sinh vào 10 cho cấu trúc này.`,
         examples: [],
       };
       setMeaningResult(fallback);
@@ -674,13 +742,22 @@ export const HighlightTextDetector: React.FC<HighlightTextDetectorProps> = ({
 
   // Check if item is already in Saved Highlights
   const checkIfSaved = (word: string) => {
+    if (!word) {
+      setIsSaved(false);
+      return;
+    }
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
-        const parsed: SavedHighlightItem[] = JSON.parse(saved);
-        const exists = parsed.some((it) => it.text.toLowerCase() === word.toLowerCase());
-        setIsSaved(exists);
-        return;
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          const target = word.toLowerCase().trim();
+          const exists = parsed.some(
+            (it) => it && typeof it.text === 'string' && it.text.toLowerCase().trim() === target
+          );
+          setIsSaved(exists);
+          return;
+        }
       }
     } catch {}
     setIsSaved(false);
@@ -688,12 +765,19 @@ export const HighlightTextDetector: React.FC<HighlightTextDetectorProps> = ({
 
   // Toggle Save to Notebook directly from Instant Popover
   const handleToggleSave = () => {
-    if (!meaningResult) return;
+    if (!meaningResult || !meaningResult.originalText) return;
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
-      let list: SavedHighlightItem[] = saved ? JSON.parse(saved) : [];
+      let list: SavedHighlightItem[] = [];
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) list = parsed;
+        } catch {}
+      }
+      const target = meaningResult.originalText.toLowerCase().trim();
       const existsIndex = list.findIndex(
-        (it) => it.text.toLowerCase() === meaningResult.originalText.toLowerCase()
+        (it) => it && typeof it.text === 'string' && it.text.toLowerCase().trim() === target
       );
 
       if (existsIndex !== -1) {

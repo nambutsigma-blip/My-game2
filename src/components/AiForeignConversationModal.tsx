@@ -173,6 +173,22 @@ export const AiForeignConversationModal: React.FC<AiForeignConversationModalProp
   // Audio player state
   const [currentlyPlayingAudioId, setCurrentlyPlayingAudioId] = useState<string | null>(null);
 
+  // In-app Modal Confirmation & Notification Toasts (No window.alert / window.confirm)
+  const [showResetConfirmModal, setShowResetConfirmModal] = useState(false);
+  const [toastNotification, setToastNotification] = useState<{
+    text: string;
+    type: 'success' | 'info' | 'warn';
+  } | null>(null);
+  const toastTimeoutRef = useRef<any>(null);
+
+  const showToast = (text: string, type: 'success' | 'info' | 'warn' = 'success') => {
+    clearTimeout(toastTimeoutRef.current);
+    setToastNotification({ text, type });
+    toastTimeoutRef.current = setTimeout(() => {
+      setToastNotification(null);
+    }, 3800);
+  };
+
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   // Initialize conversation with persona's opening greeting
@@ -507,8 +523,9 @@ export const AiForeignConversationModal: React.FC<AiForeignConversationModalProp
     }
 
     playSuccessChime();
-    alert(
-      `💾 ĐÃ LƯU CUỘC TRÒ CHUYỆN & BẢN GHI ÂM THÀNH CÔNG!\n\n• Người nói chuyện: ${currentPersona.name} (${currentPersona.nationality})\n• Số tin nhắn: ${messages.length}\n• Bản ghi âm và phân tích lỗi ngữ pháp đã được lưu trữ trong mục "Sổ Lưu Trữ".`
+    showToast(
+      `Đã lưu hội thoại thành công! (${messages.length} tin nhắn & bản ghi âm)`,
+      'success'
     );
   };
 
@@ -543,9 +560,10 @@ export const AiForeignConversationModal: React.FC<AiForeignConversationModalProp
       setFullAnalysis(null);
       setActiveTab('chat');
       playSuccessChime();
+      showToast(`Đã tạo nhân vật mới: ${newPersona.name} (${newPersona.nationality})!`, 'success');
     } catch (err: any) {
       playLaser();
-      alert('Không thể tạo nhân vật lúc này: ' + err.message);
+      showToast('Không thể tạo nhân vật lúc này: ' + err.message, 'warn');
     } finally {
       setIsGeneratingPersona(false);
     }
@@ -572,24 +590,29 @@ export const AiForeignConversationModal: React.FC<AiForeignConversationModalProp
       setFullAnalysis(session.overallReview);
     }
     setActiveTab('chat');
+    showToast(`Đã nạp lại cuộc trò chuyện cùng ${session.persona.name}!`, 'info');
   };
 
   // Delete a saved session
   const handleDeleteSession = (sessionId: string) => {
-    if (!window.confirm('Bạn có chắc muốn xóa bản ghi cuộc trò chuyện này?')) return;
     const filtered = savedSessions.filter((s) => s.id !== sessionId);
     setSavedSessions(filtered);
     localStorage.setItem(STORAGE_SAVED_SESSIONS_KEY, JSON.stringify(filtered));
+    showToast('Đã xóa bản ghi cuộc trò chuyện.', 'info');
   };
 
-  // Reset Conversation back to fresh start
-  const handleResetConversation = () => {
+  // Request Reset Conversation
+  const handleRequestReset = () => {
     if (messages.length > 1) {
-      const confirmReset = window.confirm(
-        `🔄 BẠN CÓ MUỐN RESET (LÀM MỚI) CUỘC HỘI THOẠI NÀY?\n\n• Tất cả tin nhắn trao đổi hiện tại sẽ được dọn sạch để bắt đầu lại từ đầu với ${currentPersona.name}.\n• Mẹo: Nếu muốn lưu lại các câu nói và bản ghi âm vừa rồi, hãy bấm nút "Lưu Bản Ghi" trước khi reset.\n\nBạn có muốn bắt đầu lại ngay bây giờ không?`
-      );
-      if (!confirmReset) return;
+      setShowResetConfirmModal(true);
+    } else {
+      executeResetConversation();
     }
+  };
+
+  // Execute Conversation Reset back to fresh start (Clean in-app, never blocked by iFrame)
+  const executeResetConversation = () => {
+    setShowResetConfirmModal(false);
 
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
@@ -611,6 +634,7 @@ export const AiForeignConversationModal: React.FC<AiForeignConversationModalProp
     setInputVal('');
     setActiveTab('chat');
     playSuccessChime();
+    showToast(`Đã làm mới cuộc hội thoại! Hãy bắt đầu nói chuyện cùng ${currentPersona.name}.`, 'success');
   };
 
   if (!isOpen) return null;
@@ -618,6 +642,52 @@ export const AiForeignConversationModal: React.FC<AiForeignConversationModalProp
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-md animate-in fade-in duration-200">
       <div className="relative w-full max-w-5xl h-[92vh] max-h-[880px] bg-slate-900 border-2 border-slate-700/80 rounded-3xl shadow-2xl flex flex-col overflow-hidden text-slate-100">
+        {/* Reset Conversation In-App Modal Dialog (Never blocked by iFrame/browser popup blockers) */}
+        {showResetConfirmModal && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-sm animate-in fade-in duration-150">
+            <div className="w-full max-w-md bg-slate-900 border-2 border-amber-500/60 rounded-3xl p-6 shadow-2xl space-y-4 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center mx-auto text-amber-400">
+                <RotateCcw className="w-7 h-7 animate-spin-reverse" />
+              </div>
+
+              <div className="space-y-1.5">
+                <h3 className="text-lg font-black text-white">Reset Cuộc Hội Thoại Này?</h3>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  Tất cả các tin nhắn trò chuyện và lượt thu âm hiện tại sẽ được dọn sạch để bạn bắt đầu lại cuộc trò chuyện từ đầu với{' '}
+                  <strong className="text-amber-300 font-bold">{currentPersona.name}</strong>.
+                </p>
+                <p className="text-[11px] text-emerald-400 font-semibold bg-emerald-950/40 border border-emerald-500/30 rounded-xl p-2">
+                  💡 Bạn có thể bấm &ldquo;Lưu Bản Ghi&rdquo; trước khi reset nếu muốn lưu lại các câu nói vừa rồi vào Sổ Lưu Trữ.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  onClick={() => setShowResetConfirmModal(false)}
+                  className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs cursor-pointer transition-colors"
+                >
+                  Giữ Lại
+                </button>
+                <button
+                  onClick={executeResetConversation}
+                  className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 via-rose-500 to-red-600 hover:from-amber-400 hover:to-rose-400 text-slate-950 font-black text-xs cursor-pointer transition-all shadow-lg active:scale-95 flex items-center justify-center gap-1.5"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Xác Nhận Reset</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* In-App Toast Notification Banner */}
+        {toastNotification && (
+          <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2 rounded-2xl bg-slate-950/95 border border-emerald-500/60 shadow-2xl text-xs font-bold text-emerald-300 backdrop-blur-md animate-in fade-in slide-in-from-top-4 duration-200">
+            <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>{toastNotification.text}</span>
+          </div>
+        )}
+
         {/* Top Header Bar */}
         <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-slate-800 bg-slate-950/80">
           <div className="flex items-center gap-3">
@@ -645,8 +715,8 @@ export const AiForeignConversationModal: React.FC<AiForeignConversationModalProp
           <div className="flex items-center gap-2">
             {/* Reset Conversation Button */}
             <button
-              onClick={handleResetConversation}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-rose-950/80 border border-slate-700 hover:border-rose-500/50 text-slate-300 hover:text-rose-200 font-bold text-xs cursor-pointer transition-all active:scale-95 shadow-sm group"
+              onClick={handleRequestReset}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-rose-950/80 border border-slate-700 hover:border-rose-500/50 text-slate-200 hover:text-rose-200 font-bold text-xs cursor-pointer transition-all active:scale-95 shadow-sm group"
               title="Reset và bắt đầu lại cuộc trò chuyện từ đầu với người bản xứ này"
             >
               <RotateCcw className="w-3.5 h-3.5 text-amber-400 group-hover:-rotate-90 transition-transform" />
@@ -977,11 +1047,11 @@ export const AiForeignConversationModal: React.FC<AiForeignConversationModalProp
                     Chủ đề: <strong className="text-amber-300">{currentPersona.topic}</strong>
                   </span>
                   <button
-                    onClick={handleResetConversation}
-                    className="text-slate-400 hover:text-rose-400 font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                    onClick={handleRequestReset}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-rose-950/80 border border-slate-700/80 hover:border-rose-500/50 text-slate-200 hover:text-rose-200 font-bold text-xs cursor-pointer transition-colors shadow-sm"
                     title="Xóa tin nhắn cũ và bắt đầu lại cuộc trò chuyện từ đầu"
                   >
-                    <RotateCcw className="w-3 h-3 text-slate-400" />
+                    <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
                     <span>Reset Hội Thoại</span>
                   </button>
                 </div>

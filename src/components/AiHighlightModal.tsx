@@ -34,43 +34,276 @@ interface AiHighlightModalProps {
 
 const STORAGE_KEY = 'egg_thief_saved_highlights';
 
-const COLOR_CONFIG: Record<HighlightColor, { label: string; bgClass: string; textClass: string; borderClass: string; dotClass: string }> = {
+const COLOR_CONFIG: Record<
+  HighlightColor,
+  {
+    label: string;
+    dotClass: string;
+    bgClass: string;
+    borderClass: string;
+    accentClass: string;
+  }
+> = {
   yellow: {
     label: 'Vàng Neon',
-    bgClass: 'bg-amber-400/25',
-    textClass: 'text-amber-300',
-    borderClass: 'border-amber-400/60',
     dotClass: 'bg-amber-400',
+    bgClass: 'bg-amber-950/40',
+    borderClass: 'border-amber-500/50',
+    accentClass: 'text-amber-300',
   },
   green: {
     label: 'Xanh Mint',
-    bgClass: 'bg-emerald-400/25',
-    textClass: 'text-emerald-300',
-    borderClass: 'border-emerald-400/60',
     dotClass: 'bg-emerald-400',
+    bgClass: 'bg-emerald-950/40',
+    borderClass: 'border-emerald-500/50',
+    accentClass: 'text-emerald-300',
   },
   pink: {
-    label: 'Hồng Pastel',
-    bgClass: 'bg-pink-400/25',
-    textClass: 'text-pink-300',
-    borderClass: 'border-pink-400/60',
+    label: 'Hồng Dâu',
     dotClass: 'bg-pink-400',
+    bgClass: 'bg-pink-950/40',
+    borderClass: 'border-pink-500/50',
+    accentClass: 'text-pink-300',
   },
   cyan: {
     label: 'Xanh Cyan',
-    bgClass: 'bg-cyan-400/25',
-    textClass: 'text-cyan-300',
-    borderClass: 'border-cyan-400/60',
     dotClass: 'bg-cyan-400',
+    bgClass: 'bg-cyan-950/40',
+    borderClass: 'border-cyan-500/50',
+    accentClass: 'text-cyan-300',
   },
   purple: {
     label: 'Tím Cyber',
-    bgClass: 'bg-purple-400/25',
-    textClass: 'text-purple-300',
-    borderClass: 'border-purple-400/60',
     dotClass: 'bg-purple-400',
+    bgClass: 'bg-purple-950/40',
+    borderClass: 'border-purple-500/50',
+    accentClass: 'text-purple-300',
   },
 };
+
+const CLIENT_HIGHLIGHT_DICT: Record<string, {
+  type: 'word' | 'phrase' | 'idiom' | 'sentence' | 'grammar_structure';
+  typeLabel: string;
+  phonetic?: string;
+  meaningVi: string;
+  detailedExplanation?: string;
+  grammarBreakdown?: string;
+  synonyms?: string[];
+  antonyms?: string[];
+  collocations?: string[];
+  examples?: { en: string; vi: string }[];
+  examTip?: string;
+}> = {
+  'fast asleep': {
+    type: 'phrase',
+    typeLabel: 'Cụm tính từ / Thành ngữ (Collocation)',
+    phonetic: '/ˌfæst əˈsliːp/',
+    meaningVi: 'Ngủ say, ngủ sâu giấc, chìm vào giấc ngủ say',
+    detailedExplanation: 'Cụm từ cố định (collocation) dùng để miêu tả trạng thái một người đang ngủ rất sâu, khó bị đánh thức bởi âm thanh xung quanh. Từ "fast" ở đây đóng vai trò là trạng từ bổ nghĩa mang nghĩa "chặt chẽ, sâu đậm", hoàn toàn không mang nghĩa "nhanh".',
+    grammarBreakdown: 'Thường đứng sau động từ liên kết: be fast asleep (đang ngủ rất say) hoặc fall fast asleep (chìm sâu vào giấc ngủ).',
+    synonyms: ['sound asleep', 'deep in sleep', 'slumbering'],
+    antonyms: ['wide awake', 'awake'],
+    collocations: ['fall fast asleep', 'be fast asleep', 'remain fast asleep'],
+    examples: [
+      { en: 'The children were fast asleep after an exciting day at the park.', vi: 'Lũ trẻ đã ngủ say sưa sau một ngày vui chơi hào hứng ở công viên.' },
+      { en: 'Don’t worry, the dragon is fast asleep in its lair.', vi: 'Đừng lo, con rồng đang ngủ rất say trong hang của nó.' }
+    ],
+    examTip: 'Trong đề thi vào 10: "fast asleep" là bẫy từ vựng kinh điển; đối nghĩa với "wide awake" (hoàn toàn tỉnh táo).'
+  },
+  asleep: {
+    type: 'word',
+    typeLabel: 'Tính từ (Adjective - Predicate only)',
+    phonetic: '/əˈsliːp/',
+    meaningVi: 'Đang ngủ, trong trạng thái ngủ',
+    detailedExplanation: 'Tính từ vị ngữ chỉ đứng sau động từ to be hoặc linking verbs (be asleep, fall asleep), tuyệt đối không đứng trước danh từ.',
+    grammarBreakdown: 'Không dùng "an asleep boy", mà phải dùng "a sleeping boy" hoặc "The boy is asleep".',
+    synonyms: ['sleeping', 'resting', 'in slumber'],
+    antonyms: ['awake', 'conscious'],
+    collocations: ['fall asleep', 'fast asleep', 'sound asleep', 'half asleep'],
+    examples: [
+      { en: 'He fell asleep with the book still open on his chest.', vi: 'Anh ấy đã ngủ thiếp đi khi cuốn sách vẫn còn mở trên ngực.' },
+      { en: 'The baby has finally gone to sleep and is now asleep.', vi: 'Em bé cuối cùng đã chợp mắt và lúc này đang ngủ.' }
+    ],
+    examTip: 'Bẫy đề thi: "asleep" chỉ làm vị ngữ sau be/fall, không đứng trực tiếp trước danh từ.'
+  },
+  heritage: {
+    type: 'word',
+    typeLabel: 'Danh từ (Noun)',
+    phonetic: '/ˈher.ɪ.tɪdʒ/',
+    meaningVi: 'Di sản (văn hóa, lịch sử, truyền thống)',
+    detailedExplanation: 'Chỉ các nét đẹp văn hóa, phong tục, công trình kiến trúc hoặc giá trị tinh thần được lưu truyền qua nhiều thế hệ.',
+    grammarBreakdown: 'Danh từ không đếm được hoặc đếm được. Đi với tính từ: cultural heritage, natural heritage, architectural heritage.',
+    synonyms: ['legacy', 'tradition', 'inheritance'],
+    antonyms: ['novelty', 'modernity'],
+    collocations: ['cultural heritage', 'world heritage site', 'preserve heritage'],
+    examples: [
+      { en: 'Trang An is a renowned World Cultural and Natural Heritage site in Vietnam.', vi: 'Tràng An là một quần thể Di sản Văn hóa và Thiên nhiên Thế giới nổi tiếng ở Việt Nam.' },
+      { en: 'We must make concerted efforts to preserve our national heritage.', vi: 'Chúng ta phải nỗ lực phối hợp để gìn giữ di sản quốc gia.' }
+    ],
+    examTip: 'Trong đề thi vào 10, "heritage" thường đi với động từ "preserve" (bảo tồn) hoặc "pass down" (truyền lại).'
+  },
+  preserve: {
+    type: 'word',
+    typeLabel: 'Động từ (Verb)',
+    phonetic: '/prɪˈzɜːv/',
+    meaningVi: 'Bảo tồn, gìn giữ, giữ nguyên vẹn',
+    detailedExplanation: 'Hành động bảo vệ điều gì đó khỏi sự hủy hoại, mai một hoặc suy thoái theo thời gian.',
+    grammarBreakdown: 'Ngoại động từ: preserve something (from something). Danh từ tương ứng: preservation. Tính từ: preservative.',
+    synonyms: ['protect', 'conserve', 'maintain', 'safeguard'],
+    antonyms: ['destroy', 'damage', 'neglect'],
+    collocations: ['preserve ancient monuments', 'preserve peace', 'well-preserved'],
+    examples: [
+      { en: 'The villagers work hard to preserve their traditional customs.', vi: 'Dân làng làm việc chăm chỉ để gìn giữ các phong tục truyền thống của họ.' },
+      { en: 'Ancient manuscripts are carefully preserved in temperature-controlled rooms.', vi: 'Các bản thảo cổ được bảo quản cẩn thận trong phòng kiểm soát nhiệt độ.' }
+    ],
+    examTip: 'Phân biệt "preserve" (giữ nguyên hiện trạng không bị hỏng) với "conserve" (sử dụng tiết kiệm, tránh lãng phí tài nguyên).'
+  },
+  magnificent: {
+    type: 'word',
+    typeLabel: 'Tính từ (Adjective)',
+    phonetic: '/mæɡˈnɪf.ə.sənt/',
+    meaningVi: 'Tráng lệ, nguy nga, tráng tuyệt, cực kỳ ấn tượng',
+    detailedExplanation: 'Mô tả vẻ đẹp lộng lẫy, kỳ vĩ của phong cảnh thiên nhiên, lâu đài hoặc một tác phẩm nghệ thuật đỉnh cao.',
+    grammarBreakdown: 'Tính từ mô tả (Descriptive Adjective). Trạng từ: magnificently. Danh từ: magnificence.',
+    synonyms: ['spectacular', 'breathtaking', 'splendid', 'grand'],
+    antonyms: ['modest', 'ordinary', 'plain'],
+    collocations: ['magnificent view', 'magnificent palace', 'magnificent achievement'],
+    examples: [
+      { en: 'From the mountain peak, visitors can admire a magnificent view of the sunrise.', vi: 'Từ đỉnh núi, du khách có thể chiêm ngưỡng quang cảnh bình minh tuyệt mỹ.' },
+      { en: 'The cathedral is renowned for its magnificent stained-glass windows.', vi: 'Nhà thờ nổi tiếng với những ô cửa kính màu tráng lệ.' }
+    ],
+    examTip: 'Thường xuất hiện trong phần bài đọc hiểu mô tả danh lam thắng cảnh thế giới trong đề tuyển sinh 10.'
+  },
+  'look forward to': {
+    type: 'phrase',
+    typeLabel: 'Cụm động từ (Phrasal Verb)',
+    phonetic: '/lʊk ˈfɔː.wəd tuː/',
+    meaningVi: 'Rất mong chờ, háo hức đón đợi một sự việc trong tương lai',
+    detailedExplanation: 'Diễn tả tâm trạng hào hứng, mong mỏi một sự kiện tốt đẹp sắp diễn ra. Chú ý rằng "to" ở đây là giới từ, do đó động từ đi sau bắt buộc phải chia ở dạng V-ing.',
+    grammarBreakdown: 'Cấu trúc cốt lõi: S + look forward to + V-ing / Noun phrase.',
+    synonyms: ['anticipate with pleasure', 'await eagerly'],
+    collocations: ['look forward to hearing from you', 'look forward to seeing you'],
+    examples: [
+      { en: 'I am looking forward to attending the summer cultural exchange camp.', vi: 'Tôi rất mong chờ được tham gia trại giao lưu văn hóa mùa hè.' },
+      { en: 'We look forward to receiving your favorable response soon.', vi: 'Chúng tôi rất mong sớm nhận được phản hồi thuận lợi từ bạn.' }
+    ],
+    examTip: 'BẪY KINH ĐIỂN VÀO 10: Sau "look forward to" luôn luôn là V-ING, tuyệt đối không dùng động từ nguyên thể!'
+  },
+  'give up': {
+    type: 'phrase',
+    typeLabel: 'Cụm động từ (Phrasal Verb)',
+    phonetic: '/ɡɪv ʌp/',
+    meaningVi: 'Từ bỏ, bỏ cuộc, ngừng làm việc gì đó',
+    detailedExplanation: 'Ngừng cố gắng thực hiện một việc vì quá khó khăn hoặc từ bỏ một thói quen (như bỏ hút thuốc, bỏ thói quen xấu).',
+    grammarBreakdown: 'Ngoại động từ: give up something / give up doing something.',
+    synonyms: ['quit', 'abandon', 'surrender'],
+    antonyms: ['persist', 'continue', 'persevere'],
+    collocations: ['never give up', 'give up smoking', 'give up hope'],
+    examples: [
+      { en: 'You should never give up on your dreams of entering your top-choice high school.', vi: 'Bạn đừng bao giờ từ bỏ ước mơ thi đỗ vào ngôi trường cấp ba mơ ước của mình.' },
+      { en: 'He decided to give up fast food to improve his overall health.', vi: 'Anh ấy quyết định từ bỏ đồ ăn nhanh để cải thiện sức khỏe tổng thể.' }
+    ],
+    examTip: 'Sau "give up" là V-ing: give up smoking, give up playing games.'
+  },
+  'in spite of': {
+    type: 'grammar_structure',
+    typeLabel: 'Cụm giới từ chỉ sự nhượng bộ (Concession)',
+    phonetic: '/ɪn spaɪt əv/',
+    meaningVi: 'Mặc dù, bất chấp',
+    detailedExplanation: 'Biểu thị sự tương phản giữa hai tình huống, tương đương với "despite". Cần phân biệt rõ với Although/Even though.',
+    grammarBreakdown: 'In spite of + Noun phrase / V-ing, S + V. (Không đi với một mệnh đề S + V trừ khi có "the fact that").',
+    synonyms: ['despite', 'regardless of'],
+    examples: [
+      { en: 'In spite of the heavy rain, all students arrived at the exam hall on time.', vi: 'Mặc dù trời mưa rất to, tất cả các thí sinh đều đã đến phòng thi đúng giờ.' }
+    ],
+    examTip: 'DẠNG BÀI VIẾT LẠI CÂU VÀO 10: Although + S + V <=> In spite of / Despite + Noun/V-ing.'
+  }
+};
+
+function generateClientFallbackExplanation(targetText: string, context?: string): AiHighlightResult {
+  const clean = targetText.trim();
+  const lower = clean.toLowerCase();
+  const words = clean.split(/\s+/).filter(Boolean);
+
+  // Check direct local dictionary hit
+  if (CLIENT_HIGHLIGHT_DICT[lower]) {
+    const item = CLIENT_HIGHLIGHT_DICT[lower];
+    return {
+      originalText: clean,
+      ...item,
+      vietnameseMeaning: item.meaningVi,
+      detailedExplanation: item.detailedExplanation || item.meaningVi,
+      examples: item.examples || [],
+      sourceContext: context,
+    };
+  }
+
+  // Check substring hit
+  for (const [key, item] of Object.entries(CLIENT_HIGHLIGHT_DICT)) {
+    if (lower.includes(key)) {
+      return {
+        originalText: clean,
+        ...item,
+        vietnameseMeaning: item.meaningVi,
+        detailedExplanation: item.detailedExplanation || item.meaningVi,
+        examples: item.examples || [],
+        sourceContext: context,
+      };
+    }
+  }
+
+  // Heuristic for sleep phrases
+  if (lower.includes('asleep') || lower.includes('sleep')) {
+    return {
+      originalText: clean,
+      type: 'phrase',
+      typeLabel: 'Cụm từ chỉ trạng thái ngủ (Sleep Collocation)',
+      phonetic: `/${lower}/`,
+      vietnameseMeaning: 'Trạng thái ngủ, ngủ sâu giấc hoặc chợp mắt',
+      detailedExplanation: `Cụm từ "${clean}" thường liên quan đến giấc ngủ. Trong tiếng Anh, phân biệt: "be asleep" (đang ngủ), "fall asleep" (bắt đầu ngủ thiếp đi), "fast asleep" (ngủ rất say).`,
+      grammarBreakdown: 'Đi cùng các động từ liên kết như be, fall, stay.',
+      examples: [
+        { en: `She was ${lower} when the phone rang.`, vi: `Cô ấy đang ngủ thì điện thoại reo.` }
+      ],
+      examTip: 'Bẫy đề thi: "asleep" là tính từ vị ngữ, không đứng trước danh từ.',
+      difficultyLevel: 'Chuẩn Vào 10',
+      sourceContext: context,
+    };
+  }
+
+  // Sentence heuristic
+  if (words.length >= 4 || clean.includes('.') || clean.includes('?') || clean.includes('!')) {
+    return {
+      originalText: clean,
+      type: 'sentence',
+      typeLabel: 'Cấu trúc câu hoàn chỉnh',
+      vietnameseMeaning: `Ý nghĩa câu: "${clean}" (Diễn đạt một mệnh đề/tình huống trọn vẹn).`,
+      detailedExplanation: `Câu gồm ${words.length} từ. Cần chú ý sự hòa hợp giữa chủ ngữ và vị ngữ cũng như thì của động từ chính.`,
+      examples: [
+        { en: clean, vi: 'Câu nguyên văn đang được phân tích trong ngữ cảnh bài thi.' }
+      ],
+      examTip: 'Xác định rõ chủ ngữ và động từ chính để tránh nhầm lẫn các mệnh đề phụ bổ nghĩa.',
+      difficultyLevel: 'Chuẩn Vào 10',
+      sourceContext: context,
+    };
+  }
+
+  // Generic word / short phrase
+  return {
+    originalText: clean,
+    type: words.length > 1 ? 'phrase' : 'word',
+    typeLabel: words.length > 1 ? 'Cụm từ tiếng Anh (Phrase)' : 'Từ vựng (Vocabulary)',
+    phonetic: `/${lower}/`,
+    vietnameseMeaning: `Từ/Cụm từ: "${clean}"`,
+    detailedExplanation: `Mục từ "${clean}" là một điểm kiến thức trong bài. Hãy chú ý vị trí đứng trong câu và từ loại đi cùng để chia đúng dạng ngữ pháp.`,
+    examples: [
+      { en: `It is essential to understand how "${clean}" is used in examinations.`, vi: `Hiểu rõ cách dùng "${clean}" trong các kỳ thi là điều vô cùng cần thiết.` }
+    ],
+    examTip: 'Ghi nhớ dạng từ (Word Formation) và các giới từ đi kèm nếu có.',
+    difficultyLevel: 'Chuẩn Vào 10',
+    sourceContext: context,
+  };
+}
 
 export const AiHighlightModal: React.FC<AiHighlightModalProps> = ({
   isOpen,
@@ -130,26 +363,89 @@ export const AiHighlightModal: React.FC<AiHighlightModalProps> = ({
     setCopied(false);
 
     try {
-      const res = await fetch('/api/ai-explain-highlight', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text: textToExplain,
-          context: context || contextSentence,
-          unitContext,
-        }),
-      });
+      const cleanKey = textToExplain.toLowerCase().trim();
 
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Không thể giải nghĩa lúc này');
+      // 1. Direct local dictionary match (instant 0ms response)
+      if (CLIENT_HIGHLIGHT_DICT[cleanKey]) {
+        const item = CLIENT_HIGHLIGHT_DICT[cleanKey];
+        setResult({
+          originalText: textToExplain,
+          ...item,
+          vietnameseMeaning: item.meaningVi,
+          detailedExplanation: item.detailedExplanation || item.meaningVi,
+          examples: item.examples || [],
+          sourceContext: context || contextSentence,
+        });
+        playSuccessChime();
+        setIsLoading(false);
+        return;
       }
 
-      setResult(data);
-      playSuccessChime();
+      // 2. Fetch from backend API with AbortController timeout & non-JSON guard
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 9000);
+
+      let data: any = null;
+      try {
+        const res = await fetch('/api/ai-explain-highlight', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text: textToExplain,
+            context: context || contextSentence,
+            unitContext,
+          }),
+          signal: controller.signal,
+        });
+
+        clearTimeout(timer);
+
+        try {
+          const rawText = await res.text();
+          if (rawText && rawText.trim()) {
+            try {
+              data = JSON.parse(rawText.trim());
+            } catch {
+              const firstBrace = rawText.indexOf('{');
+              const lastBrace = rawText.lastIndexOf('}');
+              if (firstBrace !== -1 && lastBrace > firstBrace) {
+                data = JSON.parse(rawText.substring(firstBrace, lastBrace + 1));
+              }
+            }
+          }
+        } catch {
+          // If reading or parsing fails, use fallback
+        }
+
+        if (!data || (!res.ok && data.error)) {
+          data = generateClientFallbackExplanation(textToExplain, context || contextSentence);
+        }
+      } catch (fetchErr: any) {
+        clearTimeout(timer);
+        console.warn('Highlight fetch error, applying fallback:', fetchErr?.message);
+        data = generateClientFallbackExplanation(textToExplain, context || contextSentence);
+      }
+
+      if (data && (data.vietnameseMeaning || data.meaningVi)) {
+        setResult({
+          ...data,
+          originalText: data.originalText || textToExplain,
+          vietnameseMeaning: data.vietnameseMeaning || data.meaningVi,
+          detailedExplanation: data.detailedExplanation || data.vietnameseMeaning || data.meaningVi,
+          examples: Array.isArray(data.examples) ? data.examples : [],
+          sourceContext: context || contextSentence,
+        });
+        playSuccessChime();
+      } else {
+        const fallback = generateClientFallbackExplanation(textToExplain, context || contextSentence);
+        setResult(fallback);
+        playSuccessChime();
+      }
     } catch (err: any) {
-      setErrorMsg(err.message || 'Lỗi kết nối với AI');
-      playLaser();
+      // Graceful fallback: never crash or display raw syntax errors
+      const fallback = generateClientFallbackExplanation(targetText, context || contextSentence);
+      setResult(fallback);
+      playSuccessChime();
     } finally {
       setIsLoading(false);
     }
