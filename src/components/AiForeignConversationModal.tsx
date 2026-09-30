@@ -26,6 +26,8 @@ import {
   Calendar,
   MessageSquare,
   ExternalLink,
+  Key,
+  Zap,
 } from 'lucide-react';
 import {
   ForeignPersona,
@@ -36,11 +38,13 @@ import {
 import { playSuccessChime, playLaser, playStealthStep } from '../utils/soundEffects';
 import { db, auth } from '../lib/firebase';
 import { collection, addDoc, getDocs, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { getAiHeaders, hasCustomApiKey } from '../utils/aiClientHelper';
 
 interface AiForeignConversationModalProps {
   isOpen: boolean;
   onClose: () => void;
   unitContext?: string;
+  onOpenApiKeyModal?: () => void;
 }
 
 const STORAGE_SAVED_SESSIONS_KEY = 'egg_thief_saved_foreign_conversations';
@@ -123,6 +127,7 @@ export const AiForeignConversationModal: React.FC<AiForeignConversationModalProp
   isOpen,
   onClose,
   unitContext = 'Chương trình Tiếng Anh Lớp 8 & Ôn thi vào 10 THPT',
+  onOpenApiKeyModal,
 }) => {
   const [activeTab, setActiveTab] = useState<'chat' | 'analysis' | 'saved' | 'persona'>('chat');
   const [currentPersona, setCurrentPersona] = useState<ForeignPersona>(PRESET_PERSONAS[0]);
@@ -133,6 +138,21 @@ export const AiForeignConversationModal: React.FC<AiForeignConversationModalProp
   const [isAiReplying, setIsAiReplying] = useState(false);
   const [showSubtitles, setShowSubtitles] = useState(true);
   const [autoplayAudio, setAutoplayAudio] = useState(true);
+
+  // Speed rate control for native speaker speech (0.75x slow, 0.95x standard, 1.25x fast native)
+  const [speechRate, setSpeechRate] = useState<number>(0.95);
+
+  // Shadowing & Pronunciation Evaluation States
+  const [shadowingPhrase, setShadowingPhrase] = useState<string | null>(null);
+  const [pronounceReport, setPronounceReport] = useState<{ messageId: string; data: any } | null>(null);
+  const [isPronounceEvaluating, setIsPronounceEvaluating] = useState(false);
+  const [hasCustomKey, setHasCustomKey] = useState<boolean>(() => hasCustomApiKey());
+
+  useEffect(() => {
+    const handleKeyChange = () => setHasCustomKey(hasCustomApiKey());
+    window.addEventListener('egg_thief_api_key_updated', handleKeyChange);
+    return () => window.removeEventListener('egg_thief_api_key_updated', handleKeyChange);
+  }, []);
 
   // Audio Recording with MediaRecorder
   const [isRecording, setIsRecording] = useState(false);
@@ -177,11 +197,11 @@ export const AiForeignConversationModal: React.FC<AiForeignConversationModalProp
   const [showResetConfirmModal, setShowResetConfirmModal] = useState(false);
   const [toastNotification, setToastNotification] = useState<{
     text: string;
-    type: 'success' | 'info' | 'warn';
+    type: 'success' | 'info' | 'warn' | 'error';
   } | null>(null);
   const toastTimeoutRef = useRef<any>(null);
 
-  const showToast = (text: string, type: 'success' | 'info' | 'warn' = 'success') => {
+  const showToast = (text: string, type: 'success' | 'info' | 'warn' | 'error' = 'success') => {
     clearTimeout(toastTimeoutRef.current);
     setToastNotification({ text, type });
     toastTimeoutRef.current = setTimeout(() => {
@@ -242,12 +262,12 @@ export const AiForeignConversationModal: React.FC<AiForeignConversationModalProp
   }, []);
 
   // Speak AI reply via SpeechSynthesis
-  const speakText = (text: string, voiceLang: string) => {
+  const speakText = (text: string, voiceLang: string, customRate?: number) => {
     if (!('speechSynthesis' in window)) return;
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = voiceLang || 'en-US';
-    utterance.rate = 0.95;
+    utterance.rate = customRate || speechRate || 0.95;
 
     // Pick appropriate voice if available
     const voices = window.speechSynthesis.getVoices();
@@ -265,12 +285,22 @@ export const AiForeignConversationModal: React.FC<AiForeignConversationModalProp
     window.speechSynthesis.speak(utterance);
   };
 
-  // Start Voice Recording
+  // Start Voice Recording (Mobile & Safari optimized)
   const handleStartRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       audioChunksRef.current = [];
-      const recorder = new MediaRecorder(stream);
+
+      let options: MediaRecorderOptions | undefined = undefined;
+      if (typeof MediaRecorder !== 'undefined' && typeof MediaRecorder.isTypeSupported === 'function') {
+        if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+          options = { mimeType: 'audio/webm;codecs=opus' };
+        } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+          options = { mimeType: 'audio/mp4' };
+        }
+      }
+
+      const recorder = options ? new MediaRecorder(stream, options) : new MediaRecorder(stream);
 
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) {
@@ -292,7 +322,7 @@ export const AiForeignConversationModal: React.FC<AiForeignConversationModalProp
         setRecordingSeconds((prev) => prev + 1);
       }, 1000);
     } catch (err) {
-      alert('Không thể truy cập Microphone. Vui lòng cấp quyền micro trên trình duyệt để ghi âm.');
+      showToast('Không thể truy cập Microphone. Vui lòng cấp quyền micro trên trình duyệt để ghi âm.', 'warn');
     }
   };
 
@@ -307,7 +337,8 @@ export const AiForeignConversationModal: React.FC<AiForeignConversationModalProp
 
     const recorder = mediaRecorderRef.current;
     recorder.onstop = () => {
-      const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+      const mime = recorder.mimeType || 'audio/webm';
+      const audioBlob = new Blob(audioChunksRef.current, { type: mime });
       const audioUrl = URL.createObjectURL(audioBlob);
 
       // Convert to base64 for permanent persistence
@@ -337,6 +368,41 @@ export const AiForeignConversationModal: React.FC<AiForeignConversationModalProp
     setIsRecording(false);
   };
 
+  // Shadowing Mode: Slow pronunciation modeling & repeating
+  const handleStartShadowing = (phrase: string) => {
+    setShadowingPhrase(phrase);
+    setInputVal(phrase);
+    speakText(phrase, currentPersona.voiceLang, 0.75);
+    showToast('Đã bật Shadowing! Hãy nghe kỹ phát âm chậm (0.75x) và bấm micro để đọc lặp lại.', 'info');
+  };
+
+  // Evaluate Pronunciation on demand for any message
+  const handleEvaluateMessageSpeech = async (msg: ConversationMessage) => {
+    if (!msg.text) return;
+    setIsPronounceEvaluating(true);
+    try {
+      const res = await fetch('/api/ai-pronounce-score', {
+        method: 'POST',
+        headers: getAiHeaders(),
+        body: JSON.stringify({
+          spokenText: msg.text,
+          accent: currentPersona.accentName || 'American',
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPronounceReport({ messageId: msg.id, data });
+        playSuccessChime();
+      } else {
+        showToast('Không thể chấm phát âm lúc này.', 'warn');
+      }
+    } catch {
+      showToast('Lỗi mạng khi chấm phát âm.', 'warn');
+    } finally {
+      setIsPronounceEvaluating(false);
+    }
+  };
+
   // Send message to Native Speaker AI & Get Grammar Feedback
   const handleSendMessage = async (
     textToSend: string,
@@ -361,13 +427,14 @@ export const AiForeignConversationModal: React.FC<AiForeignConversationModalProp
     const updatedMessages = [...messages, newUserMsg];
     setMessages(updatedMessages);
     setInputVal('');
+    setShadowingPhrase(null);
     setIsAiReplying(true);
     playStealthStep();
 
     try {
       const res = await fetch('/api/ai-foreign-chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAiHeaders(),
         body: JSON.stringify({
           persona: currentPersona,
           userMessage: cleanText,
@@ -414,7 +481,7 @@ export const AiForeignConversationModal: React.FC<AiForeignConversationModalProp
 
       // Autoplay voice if enabled
       if (autoplayAudio) {
-        speakText(data.reply, currentPersona.voiceLang);
+        speakText(data.reply, currentPersona.voiceLang, speechRate);
       }
     } catch (err: any) {
       console.warn('AI chat error:', err);
@@ -435,7 +502,7 @@ export const AiForeignConversationModal: React.FC<AiForeignConversationModalProp
   // Run Full Conversation Grammar Audit
   const handleRunFullAnalysis = async () => {
     if (messages.length <= 1) {
-      alert('Vui lòng trò chuyện ít nhất 2 câu để AI có đủ dữ liệu phân tích ngữ pháp toàn diện.');
+      showToast('Vui lòng trò chuyện ít nhất 2 câu để AI có đủ dữ liệu phân tích ngữ pháp toàn diện.', 'info');
       return;
     }
 
@@ -445,7 +512,7 @@ export const AiForeignConversationModal: React.FC<AiForeignConversationModalProp
     try {
       const res = await fetch('/api/ai-analyze-full-conversation', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAiHeaders(),
         body: JSON.stringify({
           persona: currentPersona,
           messages: messages.map((m) => ({
@@ -463,7 +530,7 @@ export const AiForeignConversationModal: React.FC<AiForeignConversationModalProp
     } catch (err: any) {
       console.error(err);
       playLaser();
-      alert('Lỗi phân tích hội thoại: ' + (err.message || 'Vui lòng thử lại'));
+      showToast('Lỗi phân tích hội thoại: ' + (err.message || 'Vui lòng thử lại'), 'error');
     } finally {
       setIsAnalyzingFull(false);
     }
@@ -472,7 +539,7 @@ export const AiForeignConversationModal: React.FC<AiForeignConversationModalProp
   // Save conversation session & audio recordings permanently (localStorage + Cloud Firestore)
   const handleSaveSession = async () => {
     if (messages.length <= 1) {
-      alert('Hãy trò chuyện một vài câu trước khi lưu lại phiên học tập.');
+      showToast('Hãy trò chuyện một vài câu trước khi lưu lại phiên học tập.', 'info');
       return;
     }
 
@@ -713,6 +780,22 @@ export const AiForeignConversationModal: React.FC<AiForeignConversationModalProp
           </div>
 
           <div className="flex items-center gap-2">
+            {onOpenApiKeyModal && (
+              <button
+                onClick={onOpenApiKeyModal}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border font-black text-xs cursor-pointer transition-all active:scale-95 shadow-sm ${
+                  hasCustomKey
+                    ? 'bg-emerald-950/80 border-emerald-500/60 text-emerald-200'
+                    : 'bg-slate-800/80 border-amber-500/50 text-amber-200 hover:border-amber-400'
+                }`}
+                title="Cấu hình Google Gemini API Key cá nhân để tối ưu tốc độ & không bao giờ bị giới hạn"
+              >
+                <Key className="w-3.5 h-3.5 text-amber-400" />
+                <span className="hidden sm:inline">API Key</span>
+                <span className={`w-1.5 h-1.5 rounded-full ${hasCustomKey ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+              </button>
+            )}
+
             {/* Reset Conversation Button */}
             <button
               onClick={handleRequestReset}

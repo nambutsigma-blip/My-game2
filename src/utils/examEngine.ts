@@ -1,5 +1,6 @@
 import { VocabularyItem, GrammarTrapItem, SpeakingCipher } from '../types';
 import { getExamQuestionsForUnit, ENTRANCE_EXAM_BANK } from '../data/entranceExamBank';
+import { getAiHeaders } from './aiClientHelper';
 
 export interface ExamPaper {
   id: string;
@@ -79,7 +80,7 @@ export async function fetchExamForUnit(
   try {
     const res = await fetch('/api/generate-exam-questions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAiHeaders(),
       body: JSON.stringify({
         unitId,
         unitTitle,

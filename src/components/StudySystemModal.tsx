@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, BookOpen, Volume2, Sparkles, Send, Search, HelpCircle, Layers, CheckCircle2, Brain, ChevronDown, ChevronUp, Lightbulb, Highlighter } from 'lucide-react';
 import { UnitData, VocabularyItem, GrammarTrapItem } from '../types';
 import { playSuccessChime, playLaser } from '../utils/soundEffects';
+import { getAiHeaders } from '../utils/aiClientHelper';
 
 interface StudySystemModalProps {
   isOpen: boolean;
@@ -81,7 +82,7 @@ export const StudySystemModal: React.FC<StudySystemModalProps> = ({
     try {
       const res = await fetch('/api/study-ai-tutor', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAiHeaders(),
         body: JSON.stringify({
           userPrompt: question,
           unitTitle: targetUnit.title,

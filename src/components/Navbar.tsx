@@ -1,7 +1,8 @@
-import React from 'react';
-import { HelpCircle, Flame, Egg, Swords, ChevronLeft, ChevronRight, Sparkles, Zap, BookOpen, Globe, Palette, RotateCcw, Edit3, User, Brain, LogIn, Mail, Check, Target, Highlighter } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { HelpCircle, Flame, Egg, Swords, ChevronLeft, ChevronRight, Sparkles, Zap, BookOpen, Globe, Palette, RotateCcw, Edit3, User, Brain, LogIn, Mail, Check, Target, Highlighter, Key } from 'lucide-react';
 import { UnitData, StolenEgg } from '../types';
 import { AppUser } from '../utils/authHelper';
+import { hasCustomApiKey } from '../utils/aiClientHelper';
 
 interface NavbarProps {
   units: UnitData[];
@@ -30,6 +31,7 @@ interface NavbarProps {
   onOpenHighlightModal?: () => void;
   isHighlighterPenActive?: boolean;
   onOpenForeignConversation?: () => void;
+  onOpenApiKeyModal?: () => void;
   currentUser?: AppUser | null;
   onOpenAuth?: () => void;
   onOpenDailyMissions?: () => void;
@@ -63,12 +65,22 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenHighlightModal,
   isHighlighterPenActive = false,
   onOpenForeignConversation,
+  onOpenApiKeyModal,
   currentUser,
   onOpenAuth,
   onOpenDailyMissions,
   dailyMissionsCompleted = 0,
   hasUnclaimedDailyRewards = false,
 }) => {
+  const [hasCustomKey, setHasCustomKey] = useState<boolean>(() => hasCustomApiKey());
+
+  useEffect(() => {
+    const handleKeyUpdate = () => {
+      setHasCustomKey(hasCustomApiKey());
+    };
+    window.addEventListener('egg_thief_api_key_updated', handleKeyUpdate);
+    return () => window.removeEventListener('egg_thief_api_key_updated', handleKeyUpdate);
+  }, []);
   const currentIndex = units.findIndex((u) => u.id === currentUnitId);
   const prevUnit = currentIndex > 0 ? units[currentIndex - 1] : null;
   const nextUnit = currentIndex < units.length - 1 ? units[currentIndex + 1] : null;
@@ -292,6 +304,28 @@ export const Navbar: React.FC<NavbarProps> = ({
               <Globe className="w-3.5 h-3.5 text-cyan-200 group-hover:rotate-12 transition-transform" />
               <span>Nói Với Người Bản Xứ</span>
               <span className="w-1.5 h-1.5 rounded-full bg-cyan-300 animate-ping" />
+            </button>
+          )}
+
+          {/* API Key Configuration Button */}
+          {onOpenApiKeyModal && (
+            <button
+              id="nav-api-key-btn"
+              onClick={onOpenApiKeyModal}
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-black cursor-pointer transition-all active:scale-95 shadow-sm ${
+                hasCustomKey
+                  ? 'bg-emerald-950/70 hover:bg-emerald-900/80 border-emerald-500/60 text-emerald-200'
+                  : 'bg-slate-900/90 hover:bg-slate-800 border-amber-500/40 text-amber-200'
+              }`}
+              title="Cấu hình Google Gemini API Key cá nhân để tối ưu tốc độ & không bao giờ bị giới hạn"
+            >
+              <Key className="w-3.5 h-3.5 text-amber-400" />
+              <span>API Key</span>
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  hasCustomKey ? 'bg-emerald-400 shadow-sm shadow-emerald-400' : 'bg-amber-400/80'
+                }`}
+              />
             </button>
           )}
 

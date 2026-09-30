@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { AiHighlightResult, HighlightColor, SavedHighlightItem } from '../types';
 import { playSuccessChime, playLaser } from '../utils/soundEffects';
+import { getAiHeaders } from '../utils/aiClientHelper';
 
 interface AiHighlightModalProps {
   isOpen: boolean;
@@ -389,7 +390,7 @@ export const AiHighlightModal: React.FC<AiHighlightModalProps> = ({
       try {
         const res = await fetch('/api/ai-explain-highlight', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getAiHeaders(),
           body: JSON.stringify({
             text: textToExplain,
             context: context || contextSentence,

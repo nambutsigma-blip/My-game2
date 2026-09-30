@@ -1,6 +1,34 @@
 // Web Audio API Synthesizer for safe zero-latency gameplay audio
 let audioCtx: AudioContext | null = null;
 
+// Auto unlock Web Audio and SpeechSynthesis on first user touch/click for all devices (especially iOS/Safari & Android)
+if (typeof window !== 'undefined') {
+  const unlockAudio = () => {
+    try {
+      if (!audioCtx) {
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioContextClass) {
+          audioCtx = new AudioContextClass();
+        }
+      }
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.getVoices();
+        // Silent utterance to unlock iOS speech synthesis
+        const dummy = new SpeechSynthesisUtterance('');
+        dummy.volume = 0;
+        window.speechSynthesis.speak(dummy);
+      }
+    } catch {}
+    window.removeEventListener('touchstart', unlockAudio);
+    window.removeEventListener('click', unlockAudio);
+  };
+  window.addEventListener('touchstart', unlockAudio, { passive: true });
+  window.addEventListener('click', unlockAudio, { passive: true });
+}
+
 function getAudioContext(): AudioContext | null {
   if (typeof window === 'undefined') return null;
   if (!audioCtx) {
@@ -251,7 +279,7 @@ export function playEvolutionSound() {
 }
 
 // Native Speech Synthesis for accurate English voice modeling
-export function speakEnglish(text: string, onEnd?: () => void) {
+export function speakEnglish(text: string, onEnd?: () => void, rate = 0.9) {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
     if (onEnd) onEnd();
     return;
@@ -260,7 +288,7 @@ export function speakEnglish(text: string, onEnd?: () => void) {
   window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = 'en-US';
-  utterance.rate = 0.9; // Slightly paced for Vietnamese Grade 8 students
+  utterance.rate = rate; // Configurable speed: 0.75x, 0.9x, 1.0x, 1.25x
   utterance.pitch = 1.0;
 
   const voices = window.speechSynthesis.getVoices();

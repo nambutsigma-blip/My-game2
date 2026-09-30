@@ -16,8 +16,10 @@ import {
   MessageSquare,
   Flame,
   BookOpen,
+  Key,
 } from 'lucide-react';
 import { playSuccessChime, playLaser } from '../utils/soundEffects';
+import { getAiHeaders, hasCustomApiKey } from '../utils/aiClientHelper';
 
 interface Message {
   id: string;
@@ -35,6 +37,7 @@ interface AiThinkingAssistantModalProps {
   onClose: () => void;
   currentUnitTitle?: string;
   initialQuestion?: string;
+  onOpenApiKeyModal?: () => void;
 }
 
 const QUICK_PROMPTS = [
@@ -51,6 +54,7 @@ export const AiThinkingAssistantModal: React.FC<AiThinkingAssistantModalProps> =
   onClose,
   currentUnitTitle = 'Tiếng Anh Lớp 8 & Vào 10',
   initialQuestion,
+  onOpenApiKeyModal,
 }) => {
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -74,9 +78,22 @@ export const AiThinkingAssistantModal: React.FC<AiThinkingAssistantModalProps> =
   const [isRecording, setIsRecording] = useState(false);
   const [speechLang, setSpeechLang] = useState<'vi-VN' | 'en-US'>('vi-VN');
   const [thinkingStage, setThinkingStage] = useState(0);
+  const [hasCustomKey, setHasCustomKey] = useState<boolean>(() => hasCustomApiKey());
+  const [toastNotice, setToastNotice] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
+
+  useEffect(() => {
+    const handleKeyChange = () => setHasCustomKey(hasCustomApiKey());
+    window.addEventListener('egg_thief_api_key_updated', handleKeyChange);
+    return () => window.removeEventListener('egg_thief_api_key_updated', handleKeyChange);
+  }, []);
+
+  const showNotice = (msg: string) => {
+    setToastNotice(msg);
+    setTimeout(() => setToastNotice(null), 3500);
+  };
 
   // Animated thinking stage messages
   const thinkingStages = [
@@ -130,7 +147,7 @@ export const AiThinkingAssistantModal: React.FC<AiThinkingAssistantModalProps> =
     try {
       const res = await fetch('/api/ai-chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAiHeaders(),
         body: JSON.stringify({
           userPrompt: question,
           history: messages,
@@ -208,7 +225,7 @@ export const AiThinkingAssistantModal: React.FC<AiThinkingAssistantModalProps> =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-      alert('Trình duyệt của bạn chưa hỗ trợ nhận diện giọng nói qua Web Speech API.');
+      showNotice('Thiết bị hoặc trình duyệt hiện tại chưa hỗ trợ Web Speech API. Bạn hãy gõ câu hỏi vào ô bên dưới nhé!');
       return;
     }
 
@@ -250,24 +267,31 @@ export const AiThinkingAssistantModal: React.FC<AiThinkingAssistantModalProps> =
   };
 
   const handleClearHistory = () => {
-    if (confirm('Bạn có chắc muốn làm mới cuộc trò chuyện với AI?')) {
-      setMessages([
-        {
-          id: 'welcome-reset-' + Date.now(),
-          sender: 'ai',
-          thinking: 'Đã thiết lập lại phiên tư duy mới.',
-          answer: 'Phiên trò chuyện đã được làm mới. Tôi sẵn sàng lắng nghe câu hỏi tiếp theo của bạn!',
-          suggestedFollowUps: QUICK_PROMPTS.slice(0, 3),
-          timestamp: 'Vừa xong',
-          isThinkingExpanded: false,
-        },
-      ]);
-    }
+    setMessages([
+      {
+        id: 'welcome-reset-' + Date.now(),
+        sender: 'ai',
+        thinking: 'Đã thiết lập lại phiên tư duy mới.',
+        answer: 'Phiên trò chuyện đã được làm mới. Tôi sẵn sàng lắng nghe câu hỏi tiếp theo của bạn!',
+        suggestedFollowUps: QUICK_PROMPTS.slice(0, 3),
+        timestamp: 'Vừa xong',
+        isThinkingExpanded: false,
+      },
+    ]);
+    showNotice('Đã làm mới phiên trò chuyện với AI.');
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-md animate-fade-in">
       <div className="w-full max-w-4xl bg-slate-900 border-2 border-indigo-500/80 rounded-3xl shadow-2xl shadow-indigo-950/80 flex flex-col h-[90vh] overflow-hidden text-white relative">
+        {/* Toast Notification Banner */}
+        {toastNotice && (
+          <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2 rounded-2xl bg-slate-950/95 border border-indigo-500/60 shadow-2xl text-xs font-bold text-indigo-300 backdrop-blur-md animate-in fade-in slide-in-from-top-4 duration-200">
+            <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span>{toastNotice}</span>
+          </div>
+        )}
+
         {/* Top Header */}
         <div className="flex items-center justify-between p-3.5 sm:p-4 border-b border-slate-800 bg-slate-950/90 gap-3">
           <div className="flex items-center gap-3">
@@ -301,6 +325,26 @@ export const AiThinkingAssistantModal: React.FC<AiThinkingAssistantModalProps> =
           </div>
 
           <div className="flex items-center gap-2">
+            {onOpenApiKeyModal && (
+              <button
+                onClick={onOpenApiKeyModal}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-black cursor-pointer transition-all active:scale-95 shadow-sm ${
+                  hasCustomKey
+                    ? 'bg-emerald-950/70 hover:bg-emerald-900 border-emerald-500/60 text-emerald-200'
+                    : 'bg-slate-800/80 hover:bg-slate-700 border-amber-500/40 text-amber-200'
+                }`}
+                title="Cấu hình Google Gemini API Key cá nhân"
+              >
+                <Key className="w-3.5 h-3.5 text-amber-400" />
+                <span className="hidden sm:inline">API Key</span>
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    hasCustomKey ? 'bg-emerald-400' : 'bg-amber-400'
+                  }`}
+                />
+              </button>
+            )}
+
             <button
               onClick={handleClearHistory}
               className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors cursor-pointer text-xs flex items-center gap-1"

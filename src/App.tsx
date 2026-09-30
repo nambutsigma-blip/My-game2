@@ -36,6 +36,7 @@ import { DailyMissionBanner } from './components/DailyMissionBanner';
 import { AiHighlightModal } from './components/AiHighlightModal';
 import { HighlightTextDetector } from './components/HighlightTextDetector';
 import { AiForeignConversationModal } from './components/AiForeignConversationModal';
+import { ApiKeyModal } from './components/ApiKeyModal';
 import { HighlightColor } from './types';
 import { getDailyMissionData } from './utils/dailyMissionManager';
 import { auth, onAuthStateChanged, signOut, updateProfile, User, db, collection, getDocs, doc, setDoc, deleteDoc, serverTimestamp } from './lib/firebase';
@@ -240,6 +241,7 @@ export default function App() {
   });
   const [aiAssistantInitialPrompt, setAiAssistantInitialPrompt] = useState<string>('');
   const [isForeignConversationOpen, setIsForeignConversationOpen] = useState(false);
+  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
 
   const handleTriggerHighlight = (text: string, context?: string) => {
     setHighlightText(text);
@@ -1015,6 +1017,7 @@ export default function App() {
         onOpenHighlightModal={() => setIsHighlightModalOpen(true)}
         isHighlighterPenActive={isHighlighterPenActive}
         onOpenForeignConversation={() => setIsForeignConversationOpen(true)}
+        onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
         currentUser={currentUser as AppUser | null}
         onOpenAuth={() => setIsAuthModalOpen(true)}
         onOpenDailyMissions={() => setIsDailyMissionOpen(true)}
@@ -1255,6 +1258,7 @@ export default function App() {
             examCode={activeExamPaper?.examCode}
             onTriggerHighlight={handleTriggerHighlight}
             onOpenForeignConversation={() => setIsForeignConversationOpen(true)}
+            onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
           />
         )}
       </main>
@@ -1487,6 +1491,7 @@ export default function App() {
         }}
         currentUnitTitle={currentUnit.title}
         initialQuestion={aiAssistantInitialPrompt}
+        onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
       />
 
       {/* Global Highlight Text Selection Detector & Floating Pen Tool */}
@@ -1519,6 +1524,13 @@ export default function App() {
         isOpen={isForeignConversationOpen}
         onClose={() => setIsForeignConversationOpen(false)}
         unitContext={currentUnit.title}
+        onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
+      />
+
+      {/* Google Gemini API Key Management Modal */}
+      <ApiKeyModal
+        isOpen={isApiKeyModalOpen}
+        onClose={() => setIsApiKeyModalOpen(false)}
       />
 
       {/* Floating AI Assistant Quick Trigger */}

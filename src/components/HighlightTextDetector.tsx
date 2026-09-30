@@ -14,6 +14,7 @@ import {
   Info,
 } from 'lucide-react';
 import { AiHighlightResult, HighlightColor, SavedHighlightItem } from '../types';
+import { getAiHeaders } from '../utils/aiClientHelper';
 
 interface HighlightTextDetectorProps {
   onTriggerHighlight: (selectedText: string, contextSentence?: string) => void;
@@ -669,7 +670,7 @@ export const HighlightTextDetector: React.FC<HighlightTextDetectorProps> = ({
 
       const res = await fetch('/api/ai-explain-highlight', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAiHeaders(),
         body: JSON.stringify({
           text: rawClean,
           context,

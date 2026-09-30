@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, MicOff, Volume2, Sparkles, AlertTriangle, CheckCircle, Shield, Award, HelpCircle, ArrowRight, MessageSquare, Flame, Clock, RefreshCw, Send, Check, Highlighter } from 'lucide-react';
+import { Mic, MicOff, Volume2, Sparkles, AlertTriangle, CheckCircle, Shield, Award, HelpCircle, ArrowRight, MessageSquare, Flame, Clock, RefreshCw, Send, Check, Highlighter, Key, Sliders, Zap } from 'lucide-react';
 import { SpeakingCipher, SpeechAnalysisResult, WordScore } from '../types';
 import { speakEnglish, playStealthStep, playLaser, playAlertUp, playSuccessChime } from '../utils/soundEffects';
+import { getAiHeaders, hasCustomApiKey } from '../utils/aiClientHelper';
 
 interface Stage3VoiceCodeProps {
   speakingCipher: SpeakingCipher;
@@ -13,6 +14,7 @@ interface Stage3VoiceCodeProps {
   examCode?: string;
   onTriggerHighlight?: (text: string, context?: string) => void;
   onOpenForeignConversation?: () => void;
+  onOpenApiKeyModal?: () => void;
 }
 
 // Client-side fallback analyzer if backend is unreachable or latency occurs
@@ -99,6 +101,7 @@ export const Stage3VoiceCode: React.FC<Stage3VoiceCodeProps> = ({
   examCode,
   onTriggerHighlight,
   onOpenForeignConversation,
+  onOpenApiKeyModal,
 }) => {
   const [activeSubMode, setActiveSubMode] = useState<'cage_cipher' | 'dragon_challenge'>('cage_cipher');
 
@@ -109,6 +112,19 @@ export const Stage3VoiceCode: React.FC<Stage3VoiceCodeProps> = ({
   const [analysisResult, setAnalysisResult] = useState<SpeechAnalysisResult | null>(null);
   const [cageCracked, setCageCracked] = useState(false);
 
+  // Speed rate control (0.75x slow for learning, 1.0x standard, 1.25x fast native)
+  const [speechRate, setSpeechRate] = useState<number>(0.9);
+
+  // Detailed Pronunciation & Fluency Evaluation State (Upgraded AI Speaking)
+  const [detailedPronounceResult, setDetailedPronounceResult] = useState<any | null>(null);
+  const [isAnalyzingPronounce, setIsAnalyzingPronounce] = useState(false);
+  const [hasCustomKey, setHasCustomKey] = useState<boolean>(() => hasCustomApiKey());
+  const [isShadowing, setIsShadowing] = useState(false);
+  const [micPermissionDenied, setMicPermissionDenied] = useState(false);
+
+  // In-UI Manual Input toggle for devices without Speech Recognition
+  const [showManualInputCard, setShowManualInputCard] = useState(false);
+
   // Mode 2: 1-1 Dragon Challenge state
   const [dragonResponseTranscript, setDragonResponseTranscript] = useState('');
   const [isDragonAnalyzing, setIsDragonAnalyzing] = useState(false);
@@ -117,13 +133,18 @@ export const Stage3VoiceCode: React.FC<Stage3VoiceCodeProps> = ({
   // Recognition ref
   const recognitionRef = useRef<any>(null);
 
+  useEffect(() => {
+    const handleKeyChange = () => setHasCustomKey(hasCustomApiKey());
+    window.addEventListener('egg_thief_api_key_updated', handleKeyChange);
+    return () => window.removeEventListener('egg_thief_api_key_updated', handleKeyChange);
+  }, []);
+
   // Setup Continuous Speech Recognition with Infinite Reading Time
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const SpeechRecognitionClass = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       if (SpeechRecognitionClass) {
         const recog = new SpeechRecognitionClass();
-        // Continuous = true: Do not cut off while user pauses or reads slowly! Infinite reading time!
         recog.continuous = true;
         recog.interimResults = true;
         recog.lang = 'en-US';
@@ -143,15 +164,16 @@ export const Stage3VoiceCode: React.FC<Stage3VoiceCodeProps> = ({
 
         recog.onerror = (event: any) => {
           console.warn('[Speech Recognition Event]', event.error);
+          if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+            setMicPermissionDenied(true);
+            setShowManualInputCard(true);
+          }
           if (event.error !== 'no-speech') {
             setIsRecording(false);
           }
         };
 
-        recog.onend = () => {
-          // If ended naturally by browser, allow restart if still in recording intent
-        };
-
+        recog.onend = () => {};
         recognitionRef.current = recog;
       }
     }
@@ -159,9 +181,7 @@ export const Stage3VoiceCode: React.FC<Stage3VoiceCodeProps> = ({
     return () => {
       try {
         recognitionRef.current?.stop();
-      } catch (e) {
-        // ignore cleanup error
-      }
+      } catch (e) {}
     };
   }, [activeSubMode, speakingCipher]);
 
@@ -169,6 +189,7 @@ export const Stage3VoiceCode: React.FC<Stage3VoiceCodeProps> = ({
   const handleStartRecording = () => {
     setAnalysisResult(null);
     setDragonFeedback(null);
+    setDetailedPronounceResult(null);
     if (activeSubMode === 'cage_cipher') {
       setTranscript('');
     } else {
@@ -184,21 +205,19 @@ export const Stage3VoiceCode: React.FC<Stage3VoiceCodeProps> = ({
         setIsRecording(true);
       }
     } else {
-      // Fallback prompt for browsers without speech recognition support
-      const fallbackPromptText = prompt(
-        'Nhập hoặc đọc câu tiếng Anh của bạn (Hệ thống hỗ trợ vô hạn thời gian đọc & suy nghĩ):',
-        activeSubMode === 'cage_cipher' ? speakingCipher.targetPhrase : ''
-      );
-      if (fallbackPromptText) {
-        if (activeSubMode === 'cage_cipher') {
-          setTranscript(fallbackPromptText);
-          analyzeSpeech(fallbackPromptText);
-        } else {
-          setDragonResponseTranscript(fallbackPromptText);
-          analyzeDragonResponse(fallbackPromptText);
-        }
-      }
+      // In-UI device-friendly prompt instead of blocking browser prompt()
+      setShowManualInputCard(true);
     }
+  };
+
+  // Step-by-Step AI Shadowing: Listen first -> Micro auto-activates -> AI evaluates
+  const handleStartShadowing = () => {
+    setIsShadowing(true);
+    speakEnglish(speakingCipher.targetPhrase, () => {
+      setIsShadowing(false);
+      playStealthStep();
+      handleStartRecording();
+    }, speechRate);
   };
 
   // Stop recording and trigger evaluation
@@ -244,13 +263,41 @@ export const Stage3VoiceCode: React.FC<Stage3VoiceCodeProps> = ({
     setIsRecording(false);
   };
 
+  // Detailed Multi-Dimensional AI Pronunciation Analysis (Phát âm, Trọng âm, Ngữ điệu & Mẹo nối âm)
+  const handleRunDetailedPronounce = async (spokenText: string) => {
+    const textToTest = spokenText.trim() || transcript.trim() || speakingCipher.targetPhrase;
+    if (!textToTest) return;
+
+    setIsAnalyzingPronounce(true);
+    try {
+      const res = await fetch('/api/ai-pronounce-score', {
+        method: 'POST',
+        headers: getAiHeaders(),
+        body: JSON.stringify({
+          spokenText: textToTest,
+          targetPhrase: speakingCipher.targetPhrase,
+          accent: 'American',
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setDetailedPronounceResult(data);
+        playSuccessChime();
+      }
+    } catch (e) {
+      console.warn('Detailed pronunciation evaluation error:', e);
+    } finally {
+      setIsAnalyzingPronounce(false);
+    }
+  };
+
   // Analyze Speech via Backend API (calls Gemini model server-side with local fallback)
   const analyzeSpeech = async (spokenText: string) => {
     setIsAnalyzing(true);
     try {
       const res = await fetch('/api/analyze-speech', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAiHeaders(),
         body: JSON.stringify({
           transcript: spokenText,
           targetPhrase: speakingCipher.targetPhrase,
@@ -298,7 +345,7 @@ export const Stage3VoiceCode: React.FC<Stage3VoiceCodeProps> = ({
     try {
       const res = await fetch('/api/dragon-challenge', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAiHeaders(),
         body: JSON.stringify({
           dragonQuestion: speakingCipher.dragonGatekeeperPrompt.question,
           studentResponse: spokenText,
@@ -413,6 +460,22 @@ export const Stage3VoiceCode: React.FC<Stage3VoiceCodeProps> = ({
                 <span className="w-1.5 h-1.5 rounded-full bg-cyan-300 animate-ping" />
               </button>
             )}
+
+            {onOpenApiKeyModal && (
+              <button
+                onClick={onOpenApiKeyModal}
+                className={`px-3 py-2 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 border ml-1 ${
+                  hasCustomKey
+                    ? 'bg-emerald-950/70 border-emerald-500/60 text-emerald-200'
+                    : 'bg-slate-900 border-amber-500/40 text-amber-200 hover:border-amber-400'
+                }`}
+                title="Cấu hình Google Gemini API Key cá nhân"
+              >
+                <Key className="w-3.5 h-3.5 text-amber-400" />
+                <span className="hidden sm:inline">API Key</span>
+                <span className={`w-1.5 h-1.5 rounded-full ${hasCustomKey ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+              </button>
+            )}
           </div>
         </div>
 
@@ -488,7 +551,7 @@ export const Stage3VoiceCode: React.FC<Stage3VoiceCodeProps> = ({
                 <Sparkles className="w-3.5 h-3.5 text-amber-400" />
                 <span>Mật Mã Cần Đọc (Target Voice Cipher):</span>
               </span>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 {onTriggerHighlight && (
                   <button
                     onClick={() => onTriggerHighlight(speakingCipher.targetPhrase, speakingCipher.expectedGrammarRule)}
@@ -499,19 +562,84 @@ export const Stage3VoiceCode: React.FC<Stage3VoiceCodeProps> = ({
                     <span>Highlight AI</span>
                   </button>
                 )}
+
+                {/* Speed Controls (0.75x, 1.0x, 1.25x) */}
+                <div className="flex items-center gap-0.5 bg-slate-900 border border-slate-700/80 rounded-xl p-0.5 text-[11px]" title="Tốc độ phát âm">
+                  <span className="text-[10px] text-slate-400 px-1 font-mono hidden sm:inline">Tốc độ:</span>
+                  {[
+                    { label: '0.75x', rate: 0.75 },
+                    { label: '1.0x', rate: 0.9 },
+                    { label: '1.25x', rate: 1.25 },
+                  ].map((s) => (
+                    <button
+                      key={s.label}
+                      onClick={() => setSpeechRate(s.rate)}
+                      className={`px-1.5 py-0.5 rounded-lg font-bold transition-all cursor-pointer ${
+                        Math.abs(speechRate - s.rate) < 0.05
+                          ? 'bg-rose-600 text-white shadow-sm'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+
                 <button
-                  onClick={() => speakEnglish(speakingCipher.targetPhrase)}
-                  className="flex items-center gap-1.5 text-xs text-rose-300 hover:text-rose-200 bg-rose-950/40 px-3 py-1.5 rounded-xl border border-rose-800/40 cursor-pointer transition-all active:scale-95"
+                  onClick={() => speakEnglish(speakingCipher.targetPhrase, undefined, speechRate)}
+                  className="flex items-center gap-1.5 text-xs text-rose-300 hover:text-rose-200 bg-rose-950/50 hover:bg-rose-900/60 px-3 py-1.5 rounded-xl border border-rose-800/40 cursor-pointer transition-all active:scale-95"
                 >
                   <Volume2 className="w-4 h-4" />
-                  <span>Nghe Giọng Đọc Mẫu Chuẩn</span>
+                  <span>Nghe Mẫu ({speechRate === 0.75 ? '0.75x' : speechRate === 1.25 ? '1.25x' : '1.0x'})</span>
+                </button>
+
+                {/* Shadowing Mode Button (Listen -> Repeat -> Score) */}
+                <button
+                  onClick={handleStartShadowing}
+                  disabled={isRecording || isShadowing}
+                  className="flex items-center gap-1.5 text-xs text-amber-300 hover:text-amber-200 bg-amber-950/60 hover:bg-amber-900/80 px-3 py-1.5 rounded-xl border border-amber-500/50 cursor-pointer transition-all active:scale-95 shadow-sm"
+                  title="Chế độ Shadowing: Nghe người bản xứ đọc xong -> Micro tự bật để bạn nhại giọng ngay!"
+                >
+                  <Sparkles className={`w-3.5 h-3.5 text-amber-400 ${isShadowing ? 'animate-spin' : ''}`} />
+                  <span>{isShadowing ? 'Đang Nghe Mẫu...' : 'Luyện Shadowing (Nghe & Lặp Lại)'}</span>
+                </button>
+
+                <button
+                  onClick={() => handleRunDetailedPronounce(transcript || speakingCipher.targetPhrase)}
+                  disabled={isAnalyzingPronounce}
+                  className="flex items-center gap-1.5 text-xs text-cyan-300 hover:text-cyan-200 bg-cyan-950/60 hover:bg-cyan-900/80 px-3 py-1.5 rounded-xl border border-cyan-500/50 cursor-pointer transition-all active:scale-95"
+                  title="AI chấm điểm chi tiết phát âm, trọng âm, ngữ điệu và nối âm"
+                >
+                  <Zap className={`w-3.5 h-3.5 ${isAnalyzingPronounce ? 'animate-spin text-cyan-400' : 'text-cyan-400'}`} />
+                  <span>{isAnalyzingPronounce ? 'AI Đang Chấm...' : 'Phân Tích Phát Âm Chuyên Sâu'}</span>
                 </button>
               </div>
             </div>
 
-            <p className="text-xl md:text-2xl font-black text-white tracking-wide">
-              &quot;{speakingCipher.targetPhrase}&quot;
-            </p>
+            {/* Interactive Word-by-Word Tap-to-Pronounce Chips */}
+            <div className="my-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {speakingCipher.targetPhrase.split(/\s+/).map((w, wIdx) => {
+                  const cleanW = w.replace(/[^a-zA-Z]/g, '');
+                  return (
+                    <button
+                      key={wIdx}
+                      type="button"
+                      onClick={() => speakEnglish(cleanW, undefined, 0.8)}
+                      className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-rose-950/80 border border-slate-700/80 hover:border-rose-500/60 text-lg sm:text-xl md:text-2xl font-black text-white hover:text-rose-200 transition-all cursor-pointer active:scale-95 group shadow-sm flex items-center gap-1.5"
+                      title={`Bấm để nghe phát âm chuẩn từ "${cleanW}" (Tốc độ chậm 0.8x)`}
+                    >
+                      <span>{w}</span>
+                      <Volume2 className="w-3.5 h-3.5 text-slate-500 group-hover:text-rose-400 opacity-60 group-hover:opacity-100 transition-opacity" />
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1.5 italic">
+                💡 Mẹo: Bạn có thể nhấn vào từng từ ở trên để nghe phát âm chậm riêng biệt!
+              </p>
+            </div>
+
             <p className="text-sm font-mono text-emerald-400 mt-1">
               {speakingCipher.phonetic}
             </p>
@@ -537,6 +665,19 @@ export const Stage3VoiceCode: React.FC<Stage3VoiceCodeProps> = ({
 
           {/* Interactive Microphone Recording Center (Infinite Reading Time) */}
           <div className="bg-slate-950/90 border border-slate-800 rounded-2xl p-6 text-center mb-6">
+            {/* Mic Permission Denied Helper Banner */}
+            {micPermissionDenied && (
+              <div className="mb-4 p-3.5 rounded-2xl bg-amber-950/80 border border-amber-500/50 text-amber-200 text-xs text-left flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <div className="font-bold text-amber-300">Microphone chưa được cấp quyền trên thiết bị!</div>
+                  <div className="text-slate-300">
+                    Vui lòng bấm vào biểu tượng ổ khóa / cài đặt trang web trên thanh địa chỉ trình duyệt để Cho phép Microphone. Hoặc bạn có thể dùng tính năng <strong>Chế Độ Nhập Tay / Giả Lập</strong> bên dưới để luyện tập ngay mà không cần micro.
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="flex flex-col items-center justify-center">
               {/* Record Button with Pulsing Glow when active */}
               <div className="relative">
@@ -557,6 +698,23 @@ export const Stage3VoiceCode: React.FC<Stage3VoiceCodeProps> = ({
                   {isRecording ? <MicOff className="w-9 h-9" /> : <Mic className="w-9 h-9" />}
                 </button>
               </div>
+
+              {/* Animated Acoustic Waveform visualizer while active */}
+              {isRecording && (
+                <div className="flex items-center justify-center gap-1.5 my-3 h-8">
+                  {[40, 75, 55, 95, 60, 85, 45, 90, 65, 80, 50].map((height, i) => (
+                    <span
+                      key={i}
+                      className="w-1.5 rounded-full bg-gradient-to-t from-rose-500 to-amber-400 animate-pulse"
+                      style={{
+                        height: `${height}%`,
+                        animationDuration: `${0.35 + (i % 4) * 0.15}s`,
+                        animationDelay: `${i * 0.06}s`,
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
 
               <div className="mt-4">
                 <p className="text-sm font-bold text-white flex items-center justify-center gap-2">
@@ -596,16 +754,48 @@ export const Stage3VoiceCode: React.FC<Stage3VoiceCodeProps> = ({
                     </button>
                   </>
                 ) : (
-                  <button
-                    onClick={handleStartRecording}
-                    className="px-6 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-black rounded-xl text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-rose-950/50 cursor-pointer transition-all hover:scale-105"
-                  >
-                    <Mic className="w-4 h-4" />
-                    <span>Bắt Đầu Đọc Mật Mã (Vô Hạn Giờ)</span>
-                  </button>
+                  <div className="flex flex-wrap items-center justify-center gap-2.5">
+                    <button
+                      onClick={handleStartRecording}
+                      className="px-6 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-black rounded-xl text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-rose-950/50 cursor-pointer transition-all hover:scale-105 active:scale-95"
+                    >
+                      <Mic className="w-4 h-4" />
+                      <span>Bắt Đầu Đọc Mật Mã (Vô Hạn Giờ)</span>
+                    </button>
+
+                    <button
+                      onClick={() => setShowManualInputCard(!showManualInputCard)}
+                      className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-slate-300 font-bold rounded-xl text-xs uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition-all active:scale-95"
+                      title="Chế độ nhập tay hoặc giả lập phát âm cho thiết bị không có micro"
+                    >
+                      <Sliders className="w-3.5 h-3.5 text-amber-400" />
+                      <span>{showManualInputCard ? 'Ẩn Hộp Nhập Giọng Nói' : 'Chế Độ Nhập Tay / Giả Lập'}</span>
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
+
+            {/* In-UI Device Compatibility Helper / Manual Voice Simulator */}
+            {showManualInputCard && (
+              <div className="mt-4 p-4 rounded-2xl bg-slate-900/90 border border-amber-500/30 text-left animate-in fade-in duration-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                    <Sliders className="w-3.5 h-3.5" />
+                    <span>Hỗ Trợ Mọi Thiết Bị (Di Động, Safari, Máy Không Có Micro)</span>
+                  </div>
+                  <button
+                    onClick={() => setTranscript(speakingCipher.targetPhrase)}
+                    className="text-[11px] px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold hover:bg-amber-500/30 transition-colors cursor-pointer"
+                  >
+                    Dán Mẫu Chuẩn Vào Ô
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  Bạn có thể gõ câu tiếng Anh hoặc dán văn bản vào ô bên dưới, sau đó bấm <strong>Chấm Điểm</strong> để kiểm tra phát âm & ngữ pháp ngay lập tức!
+                </p>
+              </div>
+            )}
 
             {/* Live Real-Time Transcript & Manual Editor Box */}
             <div className="mt-6 text-left border-t border-slate-800 pt-5">
@@ -648,6 +838,116 @@ export const Stage3VoiceCode: React.FC<Stage3VoiceCodeProps> = ({
               </div>
             </div>
           </div>
+
+          {/* Detailed Multi-Dimensional Pronunciation Assessment Card */}
+          {detailedPronounceResult && (
+            <div className="bg-slate-950 border-2 border-cyan-800/60 rounded-2xl p-5 mb-5 space-y-4 animate-in fade-in duration-200">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-cyan-500/20 text-cyan-300 flex items-center justify-center">
+                    <Zap className="w-4 h-4 text-cyan-400" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black uppercase tracking-wider text-cyan-300">
+                      Báo Cáo Phân Tích Phát Âm Chuyên Sâu AI (Acoustic Phonetics)
+                    </h4>
+                    <p className="text-[11px] text-slate-400">
+                      Đo lường 4 chỉ số: Độ lưu loát, Ngữ điệu, Trọng âm từ & Mẹo nối âm
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setDetailedPronounceResult(null)}
+                  className="text-xs text-slate-500 hover:text-slate-300 cursor-pointer"
+                >
+                  ✕ Đóng báo cáo
+                </button>
+              </div>
+
+              {/* 4 Metrics Matrix */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+                <div className="p-3 rounded-xl bg-slate-900 border border-slate-800">
+                  <div className="text-[10px] uppercase font-bold text-slate-400">Tổng Điểm</div>
+                  <div className="text-xl sm:text-2xl font-black text-cyan-300 mt-1">
+                    {detailedPronounceResult.overallScore}/100
+                  </div>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-900 border border-slate-800">
+                  <div className="text-[10px] uppercase font-bold text-slate-400">Độ Lưu Loát</div>
+                  <div className="text-xl sm:text-2xl font-black text-emerald-400 mt-1">
+                    {detailedPronounceResult.fluencyScore}/100
+                  </div>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-900 border border-slate-800">
+                  <div className="text-[10px] uppercase font-bold text-slate-400">Ngữ Điệu</div>
+                  <div className="text-xl sm:text-2xl font-black text-amber-400 mt-1">
+                    {detailedPronounceResult.intonationScore}/100
+                  </div>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-900 border border-slate-800">
+                  <div className="text-[10px] uppercase font-bold text-slate-400">Trọng Âm</div>
+                  <div className="text-xl sm:text-2xl font-black text-purple-400 mt-1">
+                    {detailedPronounceResult.stressScore}/100
+                  </div>
+                </div>
+              </div>
+
+              {/* Intonation & Linking Sounds Insights */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
+                  <span className="font-bold text-amber-300 flex items-center gap-1.5">
+                    <span>🎵 Ngữ điệu câu (Intonation Pattern):</span>
+                  </span>
+                  <p className="text-slate-300 leading-relaxed">
+                    {detailedPronounceResult.intonationPattern || 'Ngữ điệu tự nhiên, xuống giọng nhẹ cuối câu.'}
+                  </p>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
+                  <span className="font-bold text-teal-300 flex items-center gap-1.5">
+                    <span>🔗 Mẹo nối âm chuẩn bản xứ (Linking Sounds):</span>
+                  </span>
+                  <p className="text-slate-300 leading-relaxed">
+                    {detailedPronounceResult.linkingSoundsTip || 'Nối phụ âm cuối với nguyên âm đầu của từ tiếp theo.'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Word breakdown with IPA & tips */}
+              {Array.isArray(detailedPronounceResult.wordBreakdown) && detailedPronounceResult.wordBreakdown.length > 0 && (
+                <div>
+                  <div className="text-xs font-semibold text-slate-400 mb-2">
+                    Bóc tách phiên âm IPA & nhận xét từng từ:
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {detailedPronounceResult.wordBreakdown.map((item: any, idx: number) => (
+                      <div
+                        key={idx}
+                        className={`p-2 rounded-xl border text-xs flex flex-col items-center gap-0.5 min-w-[70px] ${
+                          item.status === 'green'
+                            ? 'bg-emerald-950/60 border-emerald-500/50 text-emerald-200'
+                            : item.status === 'yellow'
+                            ? 'bg-amber-950/60 border-amber-500/50 text-amber-200'
+                            : 'bg-rose-950/60 border-rose-500/50 text-rose-200'
+                        }`}
+                        title={item.tip}
+                      >
+                        <span className="font-bold">{item.word}</span>
+                        <span className="font-mono text-[10px] opacity-80">{item.ipa}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Pedagogical Encouragement */}
+              {detailedPronounceResult.pedagogicalEncouragement && (
+                <div className="p-3 rounded-xl bg-cyan-950/30 border border-cyan-800/40 text-xs text-cyan-200 font-medium">
+                  💡 {detailedPronounceResult.pedagogicalEncouragement}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* AI Tutor Feedback Display (Word & Phoneme Highlight) */}
           {analysisResult && (
@@ -756,6 +1056,15 @@ export const Stage3VoiceCode: React.FC<Stage3VoiceCodeProps> = ({
                   <span className="text-[10px] bg-emerald-950 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-700">
                     Vô hạn thời gian
                   </span>
+                  <button
+                    type="button"
+                    onClick={() => speakEnglish(speakingCipher.dragonGatekeeperPrompt.question, undefined, 0.85)}
+                    className="ml-auto text-xs bg-rose-950/70 hover:bg-rose-900 border border-rose-600/50 text-rose-300 px-2.5 py-1 rounded-xl flex items-center gap-1 cursor-pointer transition-all active:scale-95"
+                    title="Nghe Rồng Gác Cổng đọc câu hỏi"
+                  >
+                    <Volume2 className="w-3.5 h-3.5" />
+                    <span>Nghe Rồng Hỏi</span>
+                  </button>
                 </div>
                 <p className="text-lg md:text-xl font-black text-white">
                   &quot;{speakingCipher.dragonGatekeeperPrompt.question}&quot;
@@ -789,6 +1098,23 @@ export const Stage3VoiceCode: React.FC<Stage3VoiceCodeProps> = ({
                   {isRecording ? <MicOff className="w-9 h-9" /> : <Mic className="w-9 h-9" />}
                 </button>
               </div>
+
+              {/* Animated Acoustic Waveform visualizer while active */}
+              {isRecording && (
+                <div className="flex items-center justify-center gap-1.5 my-3 h-8">
+                  {[45, 80, 60, 90, 65, 85, 50, 95, 70, 75, 55].map((height, i) => (
+                    <span
+                      key={i}
+                      className="w-1.5 rounded-full bg-gradient-to-t from-amber-500 to-yellow-400 animate-pulse"
+                      style={{
+                        height: `${height}%`,
+                        animationDuration: `${0.35 + (i % 4) * 0.15}s`,
+                        animationDelay: `${i * 0.06}s`,
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
 
               <div className="mt-4">
                 <p className="text-sm font-bold text-white flex items-center justify-center gap-2">
@@ -838,8 +1164,32 @@ export const Stage3VoiceCode: React.FC<Stage3VoiceCodeProps> = ({
               </div>
             </div>
 
+            {/* Quick Answer Suggestion Pills */}
+            {Array.isArray(speakingCipher.dragonGatekeeperPrompt.sampleAnswers) && speakingCipher.dragonGatekeeperPrompt.sampleAnswers.length > 0 && (
+              <div className="mt-4 text-left">
+                <span className="text-[11px] font-bold text-amber-400 block mb-1.5">
+                  💡 Gợi ý câu trả lời mẫu (Bấm để chọn và nghe phát âm):
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {speakingCipher.dragonGatekeeperPrompt.sampleAnswers.map((sample, sIdx) => (
+                    <button
+                      key={sIdx}
+                      type="button"
+                      onClick={() => {
+                        setDragonResponseTranscript(sample);
+                        speakEnglish(sample, undefined, speechRate);
+                      }}
+                      className="text-xs bg-slate-900 hover:bg-slate-800 border border-slate-700/80 hover:border-amber-500/50 text-slate-300 hover:text-white px-3 py-1.5 rounded-xl cursor-pointer transition-all active:scale-95 text-left"
+                    >
+                      &quot;{sample}&quot;
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Response transcript & Manual text editor */}
-            <div className="mt-6 text-left border-t border-slate-800 pt-5">
+            <div className="mt-5 text-left border-t border-slate-800 pt-5">
               <label className="text-xs font-bold text-slate-300 block mb-2">
                 📝 Nội dung câu trả lời của bạn (Có thể gõ trực tiếp):
               </label>

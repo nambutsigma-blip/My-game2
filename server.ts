@@ -969,13 +969,18 @@ Trả về JSON theo schema.`;
         return res.status(400).json({ error: 'Vui lòng cung cấp câu hỏi của bạn!' });
       }
 
-      if (!process.env.GEMINI_API_KEY) {
-        return res.status(500).json({
-          error: 'GEMINI_API_KEY chưa được thiết lập. Hãy kiểm tra cấu hình bí mật trong Settings > Secrets.',
+      const userKey = extractApiKey(req);
+      const hasKey = !!(userKey || process.env.GEMINI_API_KEY);
+
+      if (!hasKey) {
+        return res.json({
+          thinking: 'Hệ thống đang hoạt động ở chế độ cục bộ không có API key. Đang tạo câu trả lời hỗ trợ.',
+          answer: `Xin chào! Để kích hoạt toàn bộ khả năng tư duy sâu của Rồng Trí Tuệ AI, bạn có thể nhấn nút **🔑 API Key** ở thanh công cụ để nhập Google Gemini API Key miễn phí từ Google AI Studio nhé!`,
+          suggestedFollowUps: ['Làm sao để lấy Gemini API Key miễn phí?', 'Giải thích cấu trúc câu điều kiện loại 2'],
         });
       }
 
-      const ai = getGeminiClient();
+      const ai = getGeminiClient(userKey);
 
       const systemInstruction = `Bạn là "Rồng Trí Tuệ AI" (Dragon Sage AI) - Trí tuệ nhân tạo tư duy cao cấp trong game "Egg Thief: Bậc Thầy Trộm Trứng" (Tiếng Anh Lớp 8, Global Success & Destination B1, Luyện thi vào 10 THPT).
 Nhiệm vụ của bạn là: SUY NGHĨ THẬT KỸ và TRẢ LỜI MỌI CÂU HỎI của người chơi mà KHÔNG DÙNG CÂU TRẢ LỜI MẪU CỐ ĐỊNH (Không dùng hardcode).
@@ -1022,7 +1027,7 @@ QUY TẮC BẮT BUỘC:
         },
       }, 30000);
 
-      const parsed = JSON.parse(response.text?.trim() || '{}');
+      const parsed = safeParseJson(response.text);
       if (parsed && typeof parsed.answer === 'string' && parsed.answer.trim()) {
         return res.json({
           thinking: parsed.thinking || 'Đã phân tích yêu cầu câu hỏi và đối chiếu kiến thức ngôn ngữ.',
@@ -1052,13 +1057,18 @@ QUY TẮC BẮT BUỘC:
         return res.status(400).json({ error: 'Missing userPrompt' });
       }
 
-      if (!process.env.GEMINI_API_KEY) {
-        return res.status(500).json({
-          error: 'GEMINI_API_KEY chưa được cấu hình. Vui lòng cấu hình API key trong Settings > Secrets.',
+      const userKey = extractApiKey(req);
+      const hasKey = !!(userKey || process.env.GEMINI_API_KEY);
+
+      if (!hasKey) {
+        return res.json({
+          thinking: 'Chế độ trợ giảng cục bộ.',
+          reply: `Chào bạn! Về chủ đề "${unitTitle || 'Bài học'}", hãy tập trung ghi nhớ các cấu trúc trọng tâm. Để hỏi đáp chuyên sâu cùng AI, bạn có thể nhập Gemini API Key cá nhân trong nút Cấu hình API Key nhé!`,
+          suggestedFollowUps: ['Cấu trúc trọng tâm bài này là gì?', 'Cho tôi 3 ví dụ thực tế'],
         });
       }
 
-      const ai = getGeminiClient();
+      const ai = getGeminiClient(userKey);
       const prompt = `Bạn là Trợ lý AI Gia Sư Tiếng Anh thân thiện, uy tín và chuyên nghiệp trong trò chơi học tập "Egg Thief" (chương trình Tiếng Anh Lớp 8: Global Success & Destination B1, ôn thi vào 10).
 Bài học hiện tại: "${unitTitle || 'Unit'}"
 Từ vựng cốt lõi: ${JSON.stringify(vocabulary || [])}
@@ -1091,7 +1101,7 @@ YÊU CẦU:
         },
       }, 30000);
 
-      const parsed = JSON.parse(response.text?.trim() || '{}');
+      const parsed = safeParseJson(response.text);
       if (parsed && typeof parsed.reply === 'string') {
         return res.json({
           thinking: parsed.thinking || '',
@@ -1125,13 +1135,16 @@ YÊU CẦU:
         excludeSignatures = [],
       } = req.body;
 
-      if (!process.env.GEMINI_API_KEY) {
+      const userKey = extractApiKey(req);
+      const hasKey = !!(userKey || process.env.GEMINI_API_KEY);
+
+      if (!hasKey) {
         return res.status(503).json({
           error: 'GEMINI_API_KEY chưa được cấu hình. Sử dụng ngân hàng đề thi cục bộ.',
         });
       }
 
-      const ai = getGeminiClient();
+      const ai = getGeminiClient(userKey);
 
       const excludePrompt = Array.isArray(excludeSignatures) && excludeSignatures.length > 0
         ? `\n\nDANH SÁCH CÁC CÂU ĐÃ XUẤT HIỆN TRƯỚC ĐÂY (TUYỆT ĐỐI KHÔNG ĐƯỢC LẶP LẠI BẤT KỲ CÂU NÀO TRONG ĐÂY):\n${excludeSignatures.slice(-50).map((s: string, idx: number) => `${idx + 1}. ${s}`).join('\n')}`
@@ -1276,12 +1289,15 @@ Hãy trả về kết quả bằng JSON theo schema quy định.`;
 
       const cleanText = text.trim();
 
-      if (!process.env.GEMINI_API_KEY) {
+      const userKey = extractApiKey(req);
+      const hasKey = !!(userKey || process.env.GEMINI_API_KEY);
+
+      if (!hasKey) {
         return res.json(generateLocalHighlightExplanation(cleanText, context));
       }
 
       try {
-        const ai = getGeminiClient();
+        const ai = getGeminiClient(userKey);
         const prompt = `Bạn là Trợ lý AI Bậc Thầy Ngôn Ngữ & Luyện thi Tuyển sinh Lớp 10 THPT môn Tiếng Anh trong game "Egg Thief: Bậc Thầy Trộm Trứng".
 Người học vừa DÙNG TÍNH NĂNG HIGHLIGHT (bôi đen / chọn) một chữ, cụm từ hoặc câu tiếng Anh sau đây:
 "${cleanText}"
@@ -1396,7 +1412,10 @@ Hãy trả về JSON theo đúng schema quy định.`;
       const pLevel = persona?.targetLevel || 'B1';
       const pPersonality = persona?.personality || 'Thân thiện, cởi mở, dùng từ ngữ tự nhiên, nhiệt tình';
 
-      if (!process.env.GEMINI_API_KEY) {
+      const userKey = extractApiKey(req);
+      const hasKey = !!(userKey || process.env.GEMINI_API_KEY);
+
+      if (!hasKey) {
         // Fallback if no API key
         return res.json({
           reply: `That's really interesting! Speaking of ${pTopic}, I'd love to hear more about your thoughts. What do you usually like to do in your free time?`,
@@ -1410,7 +1429,7 @@ Hãy trả về JSON theo đúng schema quy định.`;
         });
       }
 
-      const ai = getGeminiClient();
+      const ai = getGeminiClient(userKey);
 
       const systemInstruction = `Bạn là Trí tuệ Nhân tạo đóng vai người bạn bản xứ / người nước ngoài tên "${pName}" đến từ "${pNation}" (Giọng: ${pAccent}, Vai trò: ${pRole}, Tính cách: ${pPersonality}).
 Chủ đề trò chuyện: "${pTopic}". Trình độ người học mục tiêu: CEFR ${pLevel}.
@@ -1544,7 +1563,10 @@ NHIỆM VỤ CỦA BẠN:
     try {
       const { topic, country, difficulty = 'B1', customPrompt } = req.body;
 
-      if (!process.env.GEMINI_API_KEY) {
+      const userKey = extractApiKey(req);
+      const hasKey = !!(userKey || process.env.GEMINI_API_KEY);
+
+      if (!hasKey) {
         // Fallback generated persona
         return res.json({
           id: `custom_${Date.now()}`,
@@ -1563,7 +1585,7 @@ NHIỆM VỤ CỦA BẠN:
         });
       }
 
-      const ai = getGeminiClient();
+      const ai = getGeminiClient(userKey);
 
       const prompt = `Bạn là Chuyên gia Ngôn ngữ & Thiết kế Nhân vật Giao tiếp Tiếng Anh.
 Nhiệm vụ: Hãy tạo ra MỘT NHÂN VẬT NGƯỜI NƯỚC NGOÀI / BẢN XỨ HOÀN TOÀN MỚI, ĐỘC ĐÁO, THÚ VỊ, KHÔNG TRÙNG LẶP, KHÔNG HARDCODE.
@@ -1672,7 +1694,10 @@ Hãy trả về JSON với các trường:
         return res.status(400).json({ error: 'Người học chưa nói câu nào trong hội thoại.' });
       }
 
-      if (!process.env.GEMINI_API_KEY) {
+      const userKey = extractApiKey(req);
+      const hasKey = !!(userKey || process.env.GEMINI_API_KEY);
+
+      if (!hasKey) {
         return res.json({
           fluencyScore: 82,
           grammarScore: 78,
@@ -1687,7 +1712,7 @@ Hãy trả về JSON với các trường:
         });
       }
 
-      const ai = getGeminiClient();
+      const ai = getGeminiClient(userKey);
 
       const prompt = `Bạn là Chuyên gia Khảo thí IELTS Speaking & Giảng viên Ngữ pháp Tiếng Anh hàng đầu.
 Nhiệm vụ: Phân tích toàn diện TOÀN BỘ CUỘC HỘI THOẠI mà học sinh vừa thực hiện với người nước ngoài AI "${persona?.name || 'Native Speaker'}" (Chủ đề: "${persona?.topic || 'Giao tiếp'}").
