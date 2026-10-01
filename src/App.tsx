@@ -37,6 +37,8 @@ import { AiHighlightModal } from './components/AiHighlightModal';
 import { HighlightTextDetector } from './components/HighlightTextDetector';
 import { AiForeignConversationModal } from './components/AiForeignConversationModal';
 import { ApiKeyModal } from './components/ApiKeyModal';
+import { MobileBottomNav } from './components/MobileBottomNav';
+import { hasCustomApiKey } from './utils/aiClientHelper';
 import { HighlightColor } from './types';
 import { getDailyMissionData } from './utils/dailyMissionManager';
 import { auth, onAuthStateChanged, signOut, updateProfile, User, db, collection, getDocs, doc, setDoc, deleteDoc, serverTimestamp } from './lib/firebase';
@@ -1026,7 +1028,7 @@ export default function App() {
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-6 space-y-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-4 py-4 sm:py-6 space-y-4 sm:space-y-6 pb-24 md:pb-6">
         {/* Daily Mission 24h Interactive Banner */}
         <DailyMissionBanner
           onOpenDailyMissions={() => setIsDailyMissionOpen(true)}
@@ -1035,60 +1037,60 @@ export default function App() {
 
         {/* Entrance Exam Thematic Paper Header (1 Unit = 1 Đề Thi Vào 10 Theo Chủ Đề) */}
         {!isChaseModeActive && (
-          <div className="bg-gradient-to-r from-slate-900 via-indigo-950/70 to-slate-900 border border-indigo-500/30 rounded-3xl p-5 shadow-xl relative overflow-hidden backdrop-blur-md">
+          <div className="bg-gradient-to-r from-slate-900 via-indigo-950/70 to-slate-900 border border-indigo-500/30 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-xl relative overflow-hidden backdrop-blur-md">
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
               <div>
-                <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                  <span className="text-xs font-black uppercase tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 px-3 py-1 rounded-full flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap mb-1.5">
+                  <span className="text-[11px] sm:text-xs font-black uppercase tracking-wider bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full flex items-center gap-1.5">
                     <BookOpen className="w-3.5 h-3.5" />
-                    <span>ĐỀ THI TUYỂN SINH VÀO LỚP 10 THPT</span>
+                    <span>ĐỀ THI VÀO 10 THPT</span>
                   </span>
-                  <span className="text-xs font-mono font-bold bg-amber-950/70 text-amber-300 border border-amber-800/60 px-2.5 py-1 rounded-lg">
+                  <span className="text-[11px] sm:text-xs font-mono font-bold bg-amber-950/70 text-amber-300 border border-amber-800/60 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-lg">
                     {activeExamPaper?.examCode || `10-THPT-${currentUnit.id.toUpperCase()}`}
                   </span>
-                  <span className={`text-xs font-bold px-2.5 py-1 rounded-lg border ${
+                  <span className={`text-[11px] sm:text-xs font-bold px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-lg border ${
                     activeExamPaper?.isAiGenerated
                       ? 'bg-purple-950/80 text-purple-300 border-purple-700/60'
                       : 'bg-teal-950/80 text-teal-300 border-teal-700/60'
                   }`}>
-                    {activeExamPaper?.isAiGenerated ? '⚡ AI Gemini Đang Phục Vụ' : '📚 Ngân Hàng Khảo Thí Chuẩn'}
+                    {activeExamPaper?.isAiGenerated ? '⚡ AI Gemini' : '📚 Khảo Thí Chuẩn'}
                   </span>
-                  <span className="text-xs font-medium text-slate-400 bg-slate-950/60 px-2.5 py-1 rounded-lg border border-slate-800">
-                    🛡️ Chống trùng lặp ({totalSeenQuestions} câu đã lưu)
+                  <span className="text-[11px] sm:text-xs font-medium text-slate-400 bg-slate-950/60 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-lg border border-slate-800 hidden xs:inline">
+                    🛡️ ({totalSeenQuestions} câu đã lưu)
                   </span>
                 </div>
-                <h3 className="text-lg md:text-xl font-black text-white flex items-center gap-2">
+                <h3 className="text-base sm:text-lg md:text-xl font-black text-white flex items-center gap-2">
                   <span>{activeExamPaper?.examTitle || `Chuyên Đề Trọng Điểm: ${currentUnit.title}`}</span>
                 </h3>
-                <p className="text-xs text-slate-300 mt-1">
+                <p className="text-[11px] sm:text-xs text-slate-300 mt-1">
                   1 Unit = 1 Đề thi vào 10 toàn diện chuẩn thang điểm 10. Vô hạn thời gian suy nghĩ! Trả lời đúng để cướp Trứng Rồng.
                 </p>
               </div>
 
               {/* Exam Actions & Difficulty Controls */}
-              <div className="flex flex-wrap items-center gap-2.5">
-                <div className="flex bg-slate-950/80 p-1 rounded-xl border border-slate-800">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+                <div className="flex bg-slate-950/80 p-0.5 sm:p-1 rounded-xl border border-slate-800">
                   <button
                     onClick={() => setExamDifficulty('standard')}
                     disabled={isGeneratingExam}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all cursor-pointer ${
                       examDifficulty === 'standard'
                         ? 'bg-indigo-600 text-white shadow-md'
                         : 'text-slate-400 hover:text-white'
                     }`}
                   >
-                    🎯 Chuẩn Vào 10 (8-9đ)
+                    🎯 Chuẩn (8-9đ)
                   </button>
                   <button
                     onClick={() => setExamDifficulty('advanced_chuyen')}
                     disabled={isGeneratingExam}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all cursor-pointer ${
                       examDifficulty === 'advanced_chuyen'
                         ? 'bg-rose-600 text-white shadow-md'
                         : 'text-slate-400 hover:text-white'
                     }`}
                   >
-                    🔥 Đề Chuyên 10 (9.5-10đ)
+                    🔥 Chuyên (9.5-10đ)
                   </button>
                 </div>
 
@@ -1096,7 +1098,7 @@ export default function App() {
                   id="btn-regenerate-exam"
                   onClick={handleRegenerateExam}
                   disabled={isGeneratingExam}
-                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs shadow-lg shadow-amber-950/40 flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+                  className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-[11px] sm:text-xs shadow-lg shadow-amber-950/40 flex items-center gap-1.5 sm:gap-2 transition-all cursor-pointer disabled:opacity-50"
                   title="AI sẽ sinh đề thi mới hoàn toàn không trùng lặp câu hỏi cũ"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${isGeneratingExam ? 'animate-spin' : ''}`} />
@@ -1117,7 +1119,7 @@ export default function App() {
 
         {/* Mission Status Bar (Only in Unit Missions) */}
         {!isChaseModeActive && (
-          <div className="space-y-4">
+          <div className="space-y-3 sm:space-y-4">
             {/* Alert Level Gauge & Stealth Progress */}
             <AlertGauge
               alertLevel={alertLevel}
@@ -1131,47 +1133,47 @@ export default function App() {
             />
 
             {/* Stages Stepper */}
-            <div className="grid grid-cols-3 gap-2 bg-slate-900/80 p-1.5 rounded-2xl border border-slate-800 backdrop-blur-md">
+            <div className="grid grid-cols-3 gap-1.5 sm:gap-2 bg-slate-900/80 p-1 sm:p-1.5 rounded-2xl border border-slate-800 backdrop-blur-md">
               <button
                 id="stage-tab-1"
                 onClick={() => setActiveStage('stage1_eye')}
-                className={`py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                className={`py-2 px-1.5 sm:px-3 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${
                   activeStage === 'stage1_eye'
                     ? 'bg-amber-500 text-slate-950 shadow-md font-extrabold'
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
-                <Eye className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Phần I (4đ):</span>
-                <span>Ngữ Âm & Từ Vựng</span>
+                <Eye className="w-3.5 h-3.5 shrink-0" />
+                <span className="sm:hidden">I. Từ Vựng</span>
+                <span className="hidden sm:inline">Phần I (4đ): Ngữ Âm & Từ Vựng</span>
               </button>
 
               <button
                 id="stage-tab-2"
                 onClick={() => setActiveStage('stage2_grammar')}
-                className={`py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                className={`py-2 px-1.5 sm:px-3 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${
                   activeStage === 'stage2_grammar'
                     ? 'bg-indigo-500 text-white shadow-md font-extrabold'
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
-                <Zap className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Phần II (3đ):</span>
-                <span>Bẫy Ngữ Pháp</span>
+                <Zap className="w-3.5 h-3.5 shrink-0" />
+                <span className="sm:hidden">II. Ngữ Pháp</span>
+                <span className="hidden sm:inline">Phần II (3đ): Bẫy Ngữ Pháp</span>
               </button>
 
               <button
                 id="stage-tab-3"
                 onClick={() => setActiveStage('stage3_speaking')}
-                className={`py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                className={`py-2 px-1.5 sm:px-3 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1 sm:gap-1.5 cursor-pointer ${
                   activeStage === 'stage3_speaking'
                     ? 'bg-rose-600 text-white shadow-md font-extrabold'
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
-                <Mic className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Phần III (3đ):</span>
-                <span>Mật Mã Khẩu Ngữ</span>
+                <Mic className="w-3.5 h-3.5 shrink-0" />
+                <span className="sm:hidden">III. Luyện Nói</span>
+                <span className="hidden sm:inline">Phần III (3đ): Mật Mã Khẩu Ngữ</span>
               </button>
             </div>
           </div>
@@ -1482,7 +1484,7 @@ export default function App() {
         }}
       />
 
-      {/* Thinking AI Assistant Modal (Gemini 3.8 Flash, Suy nghĩ độc lập, Không hardcode) */}
+      {/* Thinking AI Assistant Modal (Gemini 3.5 Flash, Suy nghĩ độc lập, Không hardcode) */}
       <AiThinkingAssistantModal
         isOpen={isAiAssistantOpen}
         onClose={() => {
@@ -1533,11 +1535,11 @@ export default function App() {
         onClose={() => setIsApiKeyModalOpen(false)}
       />
 
-      {/* Floating AI Assistant Quick Trigger */}
+      {/* Floating AI Assistant Quick Trigger (Adjusted for mobile to avoid bottom dock collision) */}
       <button
         id="floating-ai-assistant-btn"
         onClick={() => setIsAiAssistantOpen(true)}
-        className="fixed bottom-5 right-5 z-40 flex items-center gap-2 px-3.5 py-2.5 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-black text-xs sm:text-sm shadow-xl shadow-purple-950/80 border border-purple-400/40 cursor-pointer transition-all hover:scale-105 active:scale-95 group"
+        className="fixed bottom-20 right-3.5 md:bottom-5 md:right-5 z-40 flex items-center gap-2 px-3.5 py-2.5 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-black text-xs sm:text-sm shadow-xl shadow-purple-950/80 border border-purple-400/40 cursor-pointer transition-all hover:scale-105 active:scale-95 group"
         title="Hỏi đáp cùng Rồng Trí Tuệ AI (Thinking Mode - Không hardcode)"
       >
         <div className="w-6 h-6 rounded-xl bg-white/20 flex items-center justify-center text-sm group-hover:rotate-12 transition-transform">
@@ -1549,6 +1551,22 @@ export default function App() {
           <span className="relative inline-flex rounded-full h-2 w-2 bg-pink-400"></span>
         </span>
       </button>
+
+      {/* Cross-Device Touch-Optimized Bottom Navigation Dock (Visible on Mobile & Tablets < md) */}
+      <MobileBottomNav
+        activeStage={activeStage}
+        onSelectStage={(stage) => setActiveStage(stage)}
+        isChaseModeActive={isChaseModeActive}
+        onOpenForeignConversation={() => setIsForeignConversationOpen(true)}
+        onOpenAiAssistant={() => setIsAiAssistantOpen(true)}
+        onOpenHatchery={() => setIsHatcheryOpen(true)}
+        onOpenArena={() => setIsArenaOpen(true)}
+        onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
+        stolenEggsCount={stolenEggs.length}
+        dragonCrystals={dragonCrystals}
+        hasCustomKey={hasCustomApiKey()}
+        hasUnclaimedDailyRewards={hasUnclaimedDailyRewards}
+      />
     </div>
   );
 }

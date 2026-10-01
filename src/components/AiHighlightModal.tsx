@@ -23,6 +23,7 @@ import {
 import { AiHighlightResult, HighlightColor, SavedHighlightItem } from '../types';
 import { playSuccessChime, playLaser } from '../utils/soundEffects';
 import { getAiHeaders } from '../utils/aiClientHelper';
+import { lookupDictionaryWord } from '../data/dictionaryData';
 
 interface AiHighlightModalProps {
   isOpen: boolean;
@@ -221,14 +222,91 @@ const CLIENT_HIGHLIGHT_DICT: Record<string, {
   }
 };
 
+function renderHighlightedSentence(sentence: string, targetWord: string, dotClass: string) {
+  if (!sentence) return null;
+  if (!targetWord) return sentence;
+  const cleanWord = targetWord.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (!cleanWord) return sentence;
+  try {
+    const regex = new RegExp(`(${cleanWord})`, 'gi');
+    const parts = sentence.split(regex);
+    return (
+      <span>
+        {parts.map((part, i) => {
+          if (part.toLowerCase() === targetWord.toLowerCase().trim()) {
+            return (
+              <mark
+                key={i}
+                className={`px-1.5 py-0.5 rounded-md font-bold text-slate-950 ${dotClass} shadow-sm inline-block mx-0.5`}
+              >
+                {part}
+              </mark>
+            );
+          }
+          return <span key={i}>{part}</span>;
+        })}
+      </span>
+    );
+  } catch {
+    return sentence;
+  }
+}
+
 function generateClientFallbackExplanation(targetText: string, context?: string): AiHighlightResult {
   const clean = targetText.trim();
   const lower = clean.toLowerCase();
   const words = clean.split(/\s+/).filter(Boolean);
+  const isSentenceInput = words.length >= 4 || clean.includes('.') || clean.includes('?') || clean.includes('!');
 
-  // Check direct local dictionary hit
+  const hasSentenceContext = context && context.trim().length > 10;
+  const sentenceInContext = hasSentenceContext ? context!.trim() : '';
+
+  // 1. Check primary rich dictionary (A1-C1 core vocabulary & irregular verbs)
+  const dictHit = lookupDictionaryWord(clean) || lookupDictionaryWord(lower);
+  if (dictHit) {
+    const defaultSentence = dictHit.examples && dictHit.examples[0] ? dictHit.examples[0].en : `We must understand the usage of ${clean}.`;
+    const defaultSentenceVi = dictHit.examples && dictHit.examples[0] ? dictHit.examples[0].vi : `Chúng ta cần hiểu cách dùng từ vựng trong câu.`;
+    const fullSentence = sentenceInContext || defaultSentence;
+    const fullSentenceMeaning = sentenceInContext
+      ? `Ý nghĩa câu trong ngữ cảnh: "${sentenceInContext}" (Trong đó "${clean}" có nghĩa là: ${dictHit.meaningVi}).`
+      : defaultSentenceVi;
+
+    return {
+      originalText: clean,
+      type: dictHit.type,
+      typeLabel: dictHit.typeLabel,
+      phonetic: dictHit.phonetic,
+      vietnameseMeaning: dictHit.meaningVi,
+      detailedExplanation: dictHit.detailedExplanation || `Từ vựng "${clean}" mang ý nghĩa là: ${dictHit.meaningVi}.`,
+      examples: dictHit.examples || [],
+      synonyms: dictHit.synonyms,
+      antonyms: dictHit.antonyms,
+      collocations: dictHit.collocations,
+      examTip: dictHit.examTip,
+      difficultyLevel: dictHit.difficultyLevel || 'Chuẩn Vào 10',
+      sourceContext: context,
+      highlightedWord: clean,
+      highlightedWordMeaning: dictHit.meaningVi,
+      highlightedWordRole: dictHit.type === 'word' ? 'Từ vựng cốt lõi trong câu' : 'Cụm từ trọng tâm',
+      fullSentence,
+      fullSentenceMeaning,
+      sentenceStructureAnalysis: `Phân tích câu: Dùng từ vựng "${clean}" (${dictHit.typeLabel}) làm trọng tâm ngữ pháp.`,
+      keyVocabularyInSentence: [
+        { word: clean, phonetic: dictHit.phonetic, type: dictHit.typeLabel, meaning: dictHit.meaningVi }
+      ],
+    };
+  }
+
+  // 2. Check direct local dictionary hit
   if (CLIENT_HIGHLIGHT_DICT[lower]) {
     const item = CLIENT_HIGHLIGHT_DICT[lower];
+    const defaultSentence = item.examples && item.examples[0] ? item.examples[0].en : `We must understand the usage of ${clean}.`;
+    const defaultSentenceVi = item.examples && item.examples[0] ? item.examples[0].vi : `Chúng ta cần hiểu cách dùng từ vựng trong câu.`;
+    const fullSentence = sentenceInContext || defaultSentence;
+    const fullSentenceMeaning = sentenceInContext
+      ? `Ý nghĩa câu trong ngữ cảnh: "${sentenceInContext}" (Trong đó "${clean}" có nghĩa là: ${item.meaningVi}).`
+      : defaultSentenceVi;
+
     return {
       originalText: clean,
       ...item,
@@ -236,12 +314,28 @@ function generateClientFallbackExplanation(targetText: string, context?: string)
       detailedExplanation: item.detailedExplanation || item.meaningVi,
       examples: item.examples || [],
       sourceContext: context,
+      highlightedWord: clean,
+      highlightedWordMeaning: item.meaningVi,
+      highlightedWordRole: item.type === 'word' ? 'Từ vựng cốt lõi trong câu' : 'Cụm từ trọng tâm',
+      fullSentence,
+      fullSentenceMeaning,
+      sentenceStructureAnalysis: `Phân tích câu: Dùng từ vựng "${clean}" (${item.typeLabel}) làm trọng tâm ngữ pháp.`,
+      keyVocabularyInSentence: [
+        { word: clean, phonetic: item.phonetic, type: item.typeLabel, meaning: item.meaningVi }
+      ],
     };
   }
 
   // Check substring hit
   for (const [key, item] of Object.entries(CLIENT_HIGHLIGHT_DICT)) {
     if (lower.includes(key)) {
+      const defaultSentence = item.examples && item.examples[0] ? item.examples[0].en : `Students should master ${key}.`;
+      const defaultSentenceVi = item.examples && item.examples[0] ? item.examples[0].vi : `Học sinh nên nắm vững từ này.`;
+      const fullSentence = sentenceInContext || defaultSentence;
+      const fullSentenceMeaning = sentenceInContext
+        ? `Ý nghĩa câu trong ngữ cảnh: "${sentenceInContext}" (Cụm "${key}" mang nghĩa: ${item.meaningVi}).`
+        : defaultSentenceVi;
+
       return {
         originalText: clean,
         ...item,
@@ -249,12 +343,26 @@ function generateClientFallbackExplanation(targetText: string, context?: string)
         detailedExplanation: item.detailedExplanation || item.meaningVi,
         examples: item.examples || [],
         sourceContext: context,
+        highlightedWord: key,
+        highlightedWordMeaning: item.meaningVi,
+        highlightedWordRole: 'Cụm từ trọng tâm',
+        fullSentence,
+        fullSentenceMeaning,
+        sentenceStructureAnalysis: `Phân tích câu: Sử dụng cụm "${key}" làm trung tâm ngữ nghĩa.`,
+        keyVocabularyInSentence: [
+          { word: key, phonetic: item.phonetic, type: item.typeLabel, meaning: item.meaningVi }
+        ],
       };
     }
   }
 
   // Heuristic for sleep phrases
   if (lower.includes('asleep') || lower.includes('sleep')) {
+    const defaultSentence = sentenceInContext || `She was ${lower} when the phone rang.`;
+    const defaultSentenceVi = sentenceInContext
+      ? `Ý nghĩa câu trong ngữ cảnh: "${sentenceInContext}" (Diễn tả trạng thái ngủ).`
+      : `Cô ấy đang ngủ thì điện thoại reo.`;
+
     return {
       originalText: clean,
       type: 'phrase',
@@ -264,32 +372,64 @@ function generateClientFallbackExplanation(targetText: string, context?: string)
       detailedExplanation: `Cụm từ "${clean}" thường liên quan đến giấc ngủ. Trong tiếng Anh, phân biệt: "be asleep" (đang ngủ), "fall asleep" (bắt đầu ngủ thiếp đi), "fast asleep" (ngủ rất say).`,
       grammarBreakdown: 'Đi cùng các động từ liên kết như be, fall, stay.',
       examples: [
-        { en: `She was ${lower} when the phone rang.`, vi: `Cô ấy đang ngủ thì điện thoại reo.` }
+        { en: defaultSentence, vi: defaultSentenceVi }
       ],
       examTip: 'Bẫy đề thi: "asleep" là tính từ vị ngữ, không đứng trước danh từ.',
       difficultyLevel: 'Chuẩn Vào 10',
       sourceContext: context,
+      highlightedWord: clean,
+      highlightedWordMeaning: 'Trạng thái ngủ, ngủ say hoặc chợp mắt',
+      highlightedWordRole: 'Tính từ vị ngữ đứng sau linking verbs',
+      fullSentence: defaultSentence,
+      fullSentenceMeaning: defaultSentenceVi,
+      sentenceStructureAnalysis: 'Cấu trúc: be / fall + asleep (vị ngữ chỉ trạng thái của chủ ngữ).',
     };
   }
 
   // Sentence heuristic
-  if (words.length >= 4 || clean.includes('.') || clean.includes('?') || clean.includes('!')) {
+  if (isSentenceInput) {
+    const defaultSentence = clean;
+    const defaultSentenceVi = `Dịch nghĩa cả câu: "${clean}" (Diễn đạt một mệnh đề/tình huống trọn vẹn theo cấu trúc câu tiếng Anh).`;
+
+    const keyVocabs = words
+      .filter((w) => w.length >= 4 && !['that', 'this', 'with', 'from', 'have', 'were', 'been'].includes(w.toLowerCase()))
+      .slice(0, 3)
+      .map((w) => ({
+        word: w,
+        phonetic: `/${w.toLowerCase()}/`,
+        type: 'Từ vựng trong câu',
+        meaning: `Từ khóa "${w}" xuất hiện trong câu.`,
+      }));
+
     return {
       originalText: clean,
       type: 'sentence',
       typeLabel: 'Cấu trúc câu hoàn chỉnh',
-      vietnameseMeaning: `Ý nghĩa câu: "${clean}" (Diễn đạt một mệnh đề/tình huống trọn vẹn).`,
+      vietnameseMeaning: defaultSentenceVi,
       detailedExplanation: `Câu gồm ${words.length} từ. Cần chú ý sự hòa hợp giữa chủ ngữ và vị ngữ cũng như thì của động từ chính.`,
+      grammarBreakdown: 'Cấu trúc câu: S + V + O / Mệnh đề hoàn chỉnh.',
       examples: [
-        { en: clean, vi: 'Câu nguyên văn đang được phân tích trong ngữ cảnh bài thi.' }
+        { en: clean, vi: 'Ý nghĩa của cả câu đang được phân tích.' }
       ],
       examTip: 'Xác định rõ chủ ngữ và động từ chính để tránh nhầm lẫn các mệnh đề phụ bổ nghĩa.',
       difficultyLevel: 'Chuẩn Vào 10',
       sourceContext: context,
+      highlightedWord: words[0] || clean,
+      highlightedWordMeaning: 'Cấu trúc câu hoàn chỉnh',
+      highlightedWordRole: 'Mệnh đề ngữ pháp nòng cốt',
+      fullSentence: defaultSentence,
+      fullSentenceMeaning: defaultSentenceVi,
+      sentenceStructureAnalysis: 'Cấu trúc câu: Phân tích sự liên kết giữa chủ ngữ, vị ngữ và tân ngữ trong câu.',
+      keyVocabularyInSentence: keyVocabs,
     };
   }
 
   // Generic word / short phrase
+  const defaultSentence = sentenceInContext || `It is essential to understand how "${clean}" is used in examinations.`;
+  const defaultSentenceVi = sentenceInContext
+    ? `Ý nghĩa câu trong ngữ cảnh: "${sentenceInContext}" (Trong đó "${clean}" là từ vựng trọng tâm).`
+    : `Việc hiểu rõ cách dùng "${clean}" trong các kỳ thi là điều vô cùng cần thiết.`;
+
   return {
     originalText: clean,
     type: words.length > 1 ? 'phrase' : 'word',
@@ -297,12 +437,22 @@ function generateClientFallbackExplanation(targetText: string, context?: string)
     phonetic: `/${lower}/`,
     vietnameseMeaning: `Từ/Cụm từ: "${clean}"`,
     detailedExplanation: `Mục từ "${clean}" là một điểm kiến thức trong bài. Hãy chú ý vị trí đứng trong câu và từ loại đi cùng để chia đúng dạng ngữ pháp.`,
+    grammarBreakdown: 'Phân loại từ: Nhận diện vai trò cú pháp và dạng từ trong câu.',
     examples: [
-      { en: `It is essential to understand how "${clean}" is used in examinations.`, vi: `Hiểu rõ cách dùng "${clean}" trong các kỳ thi là điều vô cùng cần thiết.` }
+      { en: defaultSentence, vi: defaultSentenceVi }
     ],
     examTip: 'Ghi nhớ dạng từ (Word Formation) và các giới từ đi kèm nếu có.',
     difficultyLevel: 'Chuẩn Vào 10',
     sourceContext: context,
+    highlightedWord: clean,
+    highlightedWordMeaning: `Nghĩa của từ vựng "${clean}"`,
+    highlightedWordRole: words.length > 1 ? 'Cụm từ trong câu' : 'Từ vựng trong câu',
+    fullSentence: defaultSentence,
+    fullSentenceMeaning: defaultSentenceVi,
+    sentenceStructureAnalysis: `Từ/cụm từ "${clean}" đóng vai trò quan trọng trong cấu trúc câu hoàn chỉnh.`,
+    keyVocabularyInSentence: [
+      { word: clean, phonetic: `/${lower}/`, type: words.length > 1 ? 'Cụm từ' : 'Từ vựng', meaning: `Nghĩa: "${clean}"` }
+    ],
   };
 }
 
@@ -428,6 +578,11 @@ export const AiHighlightModal: React.FC<AiHighlightModalProps> = ({
       }
 
       if (data && (data.vietnameseMeaning || data.meaningVi)) {
+        const defaultSentence = (context || contextSentence) && (context || contextSentence)!.trim().length > 10
+          ? (context || contextSentence)!.trim()
+          : (data.examples && data.examples[0] ? data.examples[0].en : textToExplain);
+        const defaultSentenceVi = data.fullSentenceMeaning || (data.examples && data.examples[0] ? data.examples[0].vi : (data.vietnameseMeaning || data.meaningVi));
+
         setResult({
           ...data,
           originalText: data.originalText || textToExplain,
@@ -435,6 +590,13 @@ export const AiHighlightModal: React.FC<AiHighlightModalProps> = ({
           detailedExplanation: data.detailedExplanation || data.vietnameseMeaning || data.meaningVi,
           examples: Array.isArray(data.examples) ? data.examples : [],
           sourceContext: context || contextSentence,
+          highlightedWord: data.highlightedWord || textToExplain,
+          highlightedWordMeaning: data.highlightedWordMeaning || data.vietnameseMeaning || data.meaningVi,
+          highlightedWordRole: data.highlightedWordRole,
+          fullSentence: data.fullSentence || defaultSentence,
+          fullSentenceMeaning: defaultSentenceVi,
+          sentenceStructureAnalysis: data.sentenceStructureAnalysis || data.grammarBreakdown,
+          keyVocabularyInSentence: Array.isArray(data.keyVocabularyInSentence) ? data.keyVocabularyInSentence : undefined,
         });
         playSuccessChime();
       } else {
@@ -467,7 +629,15 @@ export const AiHighlightModal: React.FC<AiHighlightModalProps> = ({
   };
 
   const handleCopy = (text: string) => {
-    navigator.clipboard.writeText(text);
+    let textToCopy = text;
+    if (result) {
+      const wordPart = `TỪ VỰNG HIGHLIGHT: ${result.highlightedWord || result.originalText} (${result.phonetic || ''}) - ${result.highlightedWordMeaning || result.vietnameseMeaning}`;
+      const sentencePart = result.fullSentence
+        ? `\nÝ NGHĨA CỦA CẢ CÂU: "${result.fullSentence}"\n-> Dịch nghĩa: ${result.fullSentenceMeaning || result.vietnameseMeaning}`
+        : '';
+      textToCopy = `${wordPart}${sentencePart}`;
+    }
+    navigator.clipboard.writeText(textToCopy);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -493,6 +663,9 @@ export const AiHighlightModal: React.FC<AiHighlightModalProps> = ({
         color: currentColor,
         examples: result.examples,
         examTip: result.examTip,
+        highlightedWordMeaning: result.highlightedWordMeaning || result.vietnameseMeaning,
+        fullSentence: result.fullSentence,
+        fullSentenceMeaning: result.fullSentenceMeaning,
       };
       saveSavedItems([newItem, ...savedItems]);
       playSuccessChime();
@@ -534,7 +707,7 @@ export const AiHighlightModal: React.FC<AiHighlightModalProps> = ({
                 </h3>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 hidden sm:inline-flex items-center gap-1">
                   <Sparkles className="w-2.5 h-2.5" />
-                  Gemini Flash 3.8
+                  Gemini Flash 3.5
                 </span>
               </div>
               <p className="text-xs text-slate-400">
@@ -711,66 +884,171 @@ export const AiHighlightModal: React.FC<AiHighlightModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Main Highlighted Box */}
-                  <div className={`p-4 rounded-2xl ${activeColor.bgClass} border ${activeColor.borderClass} transition-all`}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="space-y-1">
-                        <h2 className="text-lg sm:text-xl font-black text-white tracking-wide font-sans">
-                          {result.originalText}
-                        </h2>
-                        {result.phonetic && (
-                          <div className="flex items-center gap-2 text-slate-300 font-mono text-xs">
-                            <span className="text-amber-400 font-semibold">{result.phonetic}</span>
+                  {/* 🌟 2 PHẦN TRỌNG TÂM THEO YÊU CẦU: TỪ VỰNG HIGHLIGHT & Ý NGHĨA CỦA CẢ CÂU */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {/* CARD 1: 🎯 TỪ VỰNG HIGHLIGHT */}
+                    <div className={`p-4 sm:p-5 rounded-2xl ${activeColor.bgClass} border-2 ${activeColor.borderClass} shadow-lg space-y-3 flex flex-col justify-between`}>
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between gap-2 pb-2 border-b border-white/10">
+                          <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-amber-300">
+                            <Highlighter className="w-3.5 h-3.5" />
+                            <span>1. TỪ VỰNG HIGHLIGHT</span>
+                          </div>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-900/80 text-slate-300 border border-slate-700">
+                            {result.typeLabel}
+                          </span>
+                        </div>
+
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="space-y-1">
+                            <h2 className="text-xl sm:text-2xl font-black text-white tracking-wide">
+                              {result.highlightedWord || result.originalText}
+                            </h2>
+                            {result.phonetic && (
+                              <div className="flex items-center gap-2 text-slate-300 font-mono text-xs">
+                                <span className="text-amber-400 font-bold">{result.phonetic}</span>
+                                <button
+                                  onClick={() => handleSpeak(result.highlightedWord || result.originalText)}
+                                  className={`p-1 rounded-lg hover:bg-white/10 text-amber-400 transition-colors cursor-pointer ${
+                                    isPlayingAudio ? 'animate-bounce text-amber-300' : ''
+                                  }`}
+                                  title="Nghe phát âm từ vựng"
+                                >
+                                  <Volume2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
                             <button
-                              onClick={() => handleSpeak(result.originalText)}
-                              className={`p-1 rounded-lg hover:bg-white/10 text-amber-400 transition-colors cursor-pointer ${
-                                isPlayingAudio ? 'animate-bounce text-amber-300' : ''
-                              }`}
-                              title="Nghe phát âm chuẩn (US)"
+                              onClick={() => handleSpeak(result.highlightedWord || result.originalText)}
+                              className="p-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-amber-400 border border-slate-700 hover:border-amber-400/50 transition-all cursor-pointer shadow-sm active:scale-95"
+                              title="Nghe phát âm từ vựng"
                             >
                               <Volume2 className="w-4 h-4" />
                             </button>
+                            <button
+                              onClick={() => handleCopy(`${result.highlightedWord || result.originalText}: ${result.highlightedWordMeaning || result.vietnameseMeaning}`)}
+                              className="p-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 transition-all cursor-pointer shadow-sm active:scale-95"
+                              title="Sao chép từ & nghĩa"
+                            >
+                              {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                            </button>
+                            <button
+                              onClick={toggleBookmark}
+                              className={`p-2 rounded-xl border transition-all cursor-pointer shadow-sm active:scale-95 ${
+                                isCurrentSaved
+                                  ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-amber-950/50'
+                                  : 'bg-slate-900/90 hover:bg-slate-800 text-amber-400 border-slate-700'
+                              }`}
+                              title={isCurrentSaved ? 'Đã lưu trong sổ tay (Bấm để gỡ)' : 'Lưu vào sổ tay từ vựng'}
+                            >
+                              {isCurrentSaved ? <BookmarkCheck className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
+                            </button>
                           </div>
-                        )}
+                        </div>
+
+                        {/* Nghĩa riêng biệt của từ vựng highlight */}
+                        <div className="p-3 rounded-xl bg-slate-950/85 border border-slate-800 shadow-inner">
+                          <div className="text-[10px] font-black uppercase tracking-wider text-amber-400 mb-1 flex items-center gap-1">
+                            <span>Nghĩa từ vựng highlight:</span>
+                          </div>
+                          <div className="text-base sm:text-lg font-black text-amber-200 leading-snug">
+                            {result.highlightedWordMeaning || result.vietnameseMeaning}
+                          </div>
+                          {result.highlightedWordRole && (
+                            <div className="text-[11px] text-slate-300 mt-1.5 pt-1.5 border-t border-slate-800/80">
+                              <span className="text-slate-400">Vai trò ngữ pháp:</span>{' '}
+                              <span className="font-semibold text-slate-200">{result.highlightedWordRole}</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
 
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <button
-                          onClick={() => handleSpeak(result.originalText)}
-                          className="p-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-amber-400 border border-slate-700 hover:border-amber-400/50 transition-all cursor-pointer shadow-sm active:scale-95"
-                          title="Phát âm âm thanh chuẩn"
-                        >
-                          <Volume2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleCopy(`${result.originalText} - ${result.vietnameseMeaning}`)}
-                          className="p-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 transition-all cursor-pointer shadow-sm active:scale-95"
-                          title="Sao chép từ & nghĩa"
-                        >
-                          {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                        </button>
-                        <button
-                          onClick={toggleBookmark}
-                          className={`p-2 rounded-xl border transition-all cursor-pointer shadow-sm active:scale-95 ${
-                            isCurrentSaved
-                              ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-amber-950/50'
-                              : 'bg-slate-900/80 hover:bg-slate-800 text-amber-400 border-slate-700'
-                          }`}
-                          title={isCurrentSaved ? 'Đã lưu trong sổ tay (Bấm để gỡ)' : 'Lưu vào sổ tay từ vựng'}
-                        >
-                          {isCurrentSaved ? <BookmarkCheck className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
-                        </button>
+                      {/* Từ loại & giải thích tóm tắt */}
+                      <div className="pt-2 border-t border-white/10 text-xs text-slate-300 leading-relaxed font-normal">
+                        {result.detailedExplanation}
                       </div>
                     </div>
 
-                    {/* Vietnamese Core Meaning */}
-                    <div className="mt-3 pt-3 border-t border-white/10">
-                      <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">Nghĩa tiếng Việt chuẩn:</div>
-                      <div className="text-base sm:text-lg font-bold text-white leading-snug">
-                        {result.vietnameseMeaning}
+                    {/* CARD 2: 📜 Ý NGHĨA CỦA CẢ CÂU */}
+                    <div className="p-4 sm:p-5 rounded-2xl bg-slate-950/95 border-2 border-indigo-500/60 shadow-lg space-y-3 flex flex-col justify-between">
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-800">
+                          <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-indigo-300">
+                            <BookOpen className="w-3.5 h-3.5" />
+                            <span>2. Ý NGHĨA CỦA CẢ CÂU</span>
+                          </div>
+                          <button
+                            onClick={() => handleSpeak(result.fullSentence || result.originalText)}
+                            className="flex items-center gap-1 text-[11px] font-bold text-indigo-300 hover:text-white bg-indigo-900/60 hover:bg-indigo-900 px-2.5 py-1 rounded-lg border border-indigo-700/60 cursor-pointer transition-colors"
+                            title="Nghe phát âm cả câu"
+                          >
+                            <Volume2 className="w-3.5 h-3.5" />
+                            <span>Nghe cả câu</span>
+                          </button>
+                        </div>
+
+                        {/* Câu tiếng Anh có bôi dạ quang từ vựng */}
+                        <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 text-sm sm:text-base font-semibold text-slate-100 leading-relaxed">
+                          &ldquo;{renderHighlightedSentence(
+                            result.fullSentence || result.originalText,
+                            result.highlightedWord || result.originalText,
+                            activeColor.dotClass
+                          )}&rdquo;
+                        </div>
+
+                        {/* Dịch nghĩa của cả câu */}
+                        <div className="p-3.5 rounded-xl bg-indigo-950/60 border border-indigo-700/60 shadow-inner">
+                          <div className="text-[10px] font-black uppercase tracking-wider text-indigo-300 mb-1 flex items-center gap-1">
+                            <span>Ý nghĩa / Dịch nghĩa cả câu:</span>
+                          </div>
+                          <div className="text-sm sm:text-base font-extrabold text-white leading-snug">
+                            {result.fullSentenceMeaning || result.vietnameseMeaning}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Phân tích cấu trúc câu */}
+                      <div className="pt-2 border-t border-slate-800 text-xs text-slate-300">
+                        <div className="text-[10px] font-black uppercase tracking-wider text-purple-300 mb-1 flex items-center gap-1">
+                          <Layers className="w-3 h-3" />
+                          <span>Phân tích cấu trúc câu:</span>
+                        </div>
+                        <p className="text-[11px] text-slate-300 leading-relaxed font-normal">
+                          {result.sentenceStructureAnalysis || result.grammarBreakdown || 'Áp dụng theo quy tắc ngữ pháp trọng điểm của chương trình thi vào lớp 10.'}
+                        </p>
                       </div>
                     </div>
                   </div>
+
+                  {/* Key Vocabulary in Sentence Chips (if available) */}
+                  {result.keyVocabularyInSentence && result.keyVocabularyInSentence.length > 0 && (
+                    <div className="p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-2">
+                      <div className="text-[11px] font-bold text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Từ vựng trọng tâm xuất hiện trong câu:</span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {result.keyVocabularyInSentence.map((vocab, idx) => (
+                          <button
+                            key={idx}
+                            onClick={() => {
+                              setInputText(vocab.word);
+                              handleExplainText(vocab.word, result.fullSentence);
+                            }}
+                            className="px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-850 text-slate-200 border border-slate-700 hover:border-amber-400/50 text-xs flex items-center gap-1.5 cursor-pointer transition-all hover:scale-105"
+                            title={`Bấm để tra nghĩa từ "${vocab.word}"`}
+                          >
+                            <span className="font-bold text-amber-300">{vocab.word}</span>
+                            {vocab.phonetic && <span className="font-mono text-[10px] text-slate-400">{vocab.phonetic}</span>}
+                            <span className="text-[11px] text-slate-300">↳ {vocab.meaning}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Detailed Explanation & Grammar Breakdown */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
@@ -998,7 +1276,7 @@ export const AiHighlightModal: React.FC<AiHighlightModalProps> = ({
                       }}
                       className="p-4 rounded-2xl bg-slate-950/90 hover:bg-slate-900 border border-slate-800 hover:border-amber-500/50 transition-all cursor-pointer group shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                     >
-                      <div className="space-y-1">
+                      <div className="space-y-1.5 flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className={`w-2.5 h-2.5 rounded-full ${itemColor.dotClass}`} />
                           <span className="font-black text-sm text-white group-hover:text-amber-400 transition-colors">
@@ -1011,9 +1289,28 @@ export const AiHighlightModal: React.FC<AiHighlightModalProps> = ({
                             {item.typeLabel}
                           </span>
                         </div>
-                        <div className="text-xs text-slate-300 font-medium">
-                          {item.vietnameseMeaning}
+
+                        {/* Nghĩa từ vựng */}
+                        <div className="text-xs text-amber-200 font-bold">
+                          👉 {item.highlightedWordMeaning || item.vietnameseMeaning}
                         </div>
+
+                        {/* Ý nghĩa cả câu nếu có */}
+                        {(item.fullSentence || item.fullSentenceMeaning) && (
+                          <div className="p-2 rounded-xl bg-slate-900/90 border border-slate-800 text-[11px] space-y-0.5">
+                            {item.fullSentence && (
+                              <div className="italic text-slate-300">
+                                &ldquo;{item.fullSentence}&rdquo;
+                              </div>
+                            )}
+                            {item.fullSentenceMeaning && (
+                              <div className="text-indigo-300 font-semibold">
+                                ↳ {item.fullSentenceMeaning}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         {item.examTip && (
                           <div className="text-[11px] text-amber-300/90 italic flex items-center gap-1">
                             <Lightbulb className="w-3 h-3 text-amber-400 shrink-0" />

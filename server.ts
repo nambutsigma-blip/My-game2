@@ -3,6 +3,7 @@ import path from 'path';
 import dotenv from 'dotenv';
 import { GoogleGenAI, Type } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
+import { lookupDictionaryWord, CORE_DICTIONARY } from './src/data/dictionaryData';
 
 dotenv.config();
 
@@ -52,13 +53,11 @@ function delay(ms: number): Promise<void> {
 }
 
 async function callGeminiWithFallback(ai: GoogleGenAI, requestConfig: any, timeoutMs = 30000) {
-  // Use gemini-3.1-flash-lite as first model to avoid hitting the 25M token limit on gemini-3.8-flash,
-  // followed by gemini-flash-latest, gemini-3.8-flash, and gemini-2.5-flash
+  // Upgraded to Gemini Model 3.5 (gemini-3.5-flash, gemini-3.5-flash-lite) with graceful high-speed fallback
   const candidateModels = [
-    'gemini-3.1-flash-lite',
+    'gemini-3.5-flash',
+    'gemini-3.5-flash-lite',
     'gemini-flash-latest',
-    'gemini-3.8-flash',
-    'gemini-2.5-flash',
   ];
   let lastErr: any = null;
 
@@ -469,39 +468,143 @@ function safeParseJson(rawText: string | undefined | null): any {
   }
 }
 
+// Free online translation fallback for dynamic vocabulary and sentences (0ms - 2s)
+async function fetchOnlineTranslation(text: string): Promise<string | null> {
+  if (!text || typeof text !== 'string' || !text.trim()) return null;
+  const clean = text.trim();
+  // Don't translate single punctuation
+  if (/^[.,!?;:'"()\[\]{}]+$/.test(clean)) return null;
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2500);
+    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(clean)}&langpair=en|vi`;
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeout);
+    if (!res.ok) return null;
+    const json: any = await res.json();
+    if (json && json.responseData && typeof json.responseData.translatedText === 'string') {
+      let translated = json.responseData.translatedText.trim();
+      translated = translated
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>');
+      // Verify translated text is different from english and meaningful
+      if (translated && translated.toLowerCase() !== clean.toLowerCase() && !translated.startsWith('NO QUERY')) {
+        return translated;
+      }
+    }
+  } catch {
+    // Network or timeout graceful fallback
+  }
+  return null;
+}
+
 function generateLocalHighlightExplanation(cleanText: string, context?: string) {
   const strippedText = (cleanText || '').replace(/^[\s“"‘'(\[]+|[\s”"’')\].,;:!?]+$/g, '').trim();
   const lower = (strippedText || cleanText || '').toLowerCase().trim();
   const words = lower.split(/\s+/).filter(Boolean);
+  const isSentenceInput = words.length >= 4 || cleanText.includes('.') || cleanText.includes('?') || cleanText.includes('!');
 
-  // 1. Direct dictionary match
+  const hasSentenceContext = context && context.trim().length > 10;
+  const sentenceInContext = hasSentenceContext ? context!.trim() : '';
+
+  // 1. Check primary CORE_DICTIONARY and morphological variants
+  const dictItem = lookupDictionaryWord(strippedText) || lookupDictionaryWord(lower);
+  if (dictItem) {
+    const defaultSentence = dictItem.examples && dictItem.examples[0] ? dictItem.examples[0].en : `You should pay attention to ${strippedText}.`;
+    const defaultSentenceVi = dictItem.examples && dictItem.examples[0] ? dictItem.examples[0].vi : `Bạn nên chú ý đến ${dictItem.meaningVi}.`;
+
+    const fullSentence = sentenceInContext || defaultSentence;
+    const fullSentenceMeaning = sentenceInContext
+      ? `Ý nghĩa ngữ cảnh câu: "${sentenceInContext}" (Trong đó "${strippedText}" có nghĩa là: ${dictItem.meaningVi}).`
+      : defaultSentenceVi;
+
+    return {
+      originalText: cleanText,
+      type: dictItem.type,
+      typeLabel: dictItem.typeLabel,
+      phonetic: dictItem.phonetic,
+      vietnameseMeaning: dictItem.meaningVi,
+      detailedExplanation: dictItem.detailedExplanation || `Từ vựng "${strippedText}" có nghĩa là ${dictItem.meaningVi}.`,
+      grammarBreakdown: dictItem.grammarBreakdown || `Từ loại: ${dictItem.typeLabel}. Chú ý cách dùng trong câu.`,
+      examples: dictItem.examples,
+      synonyms: dictItem.synonyms,
+      antonyms: dictItem.antonyms,
+      collocations: dictItem.collocations,
+      examTip: dictItem.examTip || 'Trong đề thi tuyển sinh vào 10, chú ý phân biệt từ loại và giới từ đi kèm.',
+      difficultyLevel: dictItem.difficultyLevel || 'Chuẩn Vào 10',
+      sourceContext: context || undefined,
+      // 🌟 RÕ RÀNG 2 MỤC: Ý NGHĨA CẢ CÂU & TỪ VỰNG HIGHLIGHT
+      highlightedWord: strippedText || cleanText,
+      highlightedWordMeaning: dictItem.meaningVi,
+      highlightedWordRole: dictItem.type === 'word' ? 'Từ vựng trọng tâm trong câu' : 'Cụm từ / Thành ngữ trong câu',
+      fullSentence,
+      fullSentenceMeaning,
+      sentenceStructureAnalysis: `Phân tích câu: Dùng từ/cụm "${strippedText}" để truyền tải ý nghĩa chính xác trong ngữ cảnh.`,
+      keyVocabularyInSentence: [
+        { word: strippedText, phonetic: dictItem.phonetic, type: dictItem.typeLabel, meaning: dictItem.meaningVi }
+      ],
+    };
+  }
+
+  // 2. Check LOCAL_HIGHLIGHT_DICT
   if (LOCAL_HIGHLIGHT_DICT[lower]) {
     const item = LOCAL_HIGHLIGHT_DICT[lower];
+    const defaultSentence = item.examples && item.examples[0] ? item.examples[0].en : `We should understand the importance of ${strippedText} in modern life.`;
+    const defaultSentenceVi = item.examples && item.examples[0] ? item.examples[0].vi : `Chúng ta cần hiểu tầm quan trọng của ${item.meaningVi} trong cuộc sống hiện đại.`;
+
+    const fullSentence = sentenceInContext || defaultSentence;
+    const fullSentenceMeaning = sentenceInContext ? `Ý nghĩa ngữ cảnh câu: "${sentenceInContext}" (Trong đó "${strippedText}" đóng vai trò quan trọng: ${item.meaningVi}).` : defaultSentenceVi;
+
     return {
       originalText: cleanText,
       ...item,
       vietnameseMeaning: item.meaningVi,
       sourceContext: context || undefined,
+      highlightedWord: strippedText || cleanText,
+      highlightedWordMeaning: item.meaningVi,
+      highlightedWordRole: item.type === 'word' ? 'Từ vựng trọng tâm trong câu' : 'Cụm từ / Thành ngữ vị ngữ trong câu',
+      fullSentence,
+      fullSentenceMeaning,
+      sentenceStructureAnalysis: `Câu hoàn chỉnh: Sử dụng cấu trúc "${strippedText}" để truyền tải ý nghĩa chính xác trong ngữ cảnh thi vào 10.`,
+      keyVocabularyInSentence: [
+        { word: strippedText, phonetic: item.phonetic, type: item.typeLabel, meaning: item.meaningVi }
+      ],
     };
   }
 
-  // 2. Multi-word phrase matches in dictionary (only multi-word keys to prevent false substring matches)
+  // 3. Multi-word phrase matches in dictionary
   for (const [key, val] of Object.entries(LOCAL_HIGHLIGHT_DICT)) {
     if (key.includes(' ')) {
-      // Check if lower equals key or contains key as an isolated phrase
       if (lower === key || lower.includes(key)) {
+        const defaultSentence = val.examples && val.examples[0] ? val.examples[0].en : `The students managed to ${key} successfully.`;
+        const defaultSentenceVi = val.examples && val.examples[0] ? val.examples[0].vi : `Các học sinh đã hoàn thành một cách xuất sắc.`;
+        const fullSentence = sentenceInContext || defaultSentence;
+        const fullSentenceMeaning = sentenceInContext ? `Ý nghĩa câu: "${sentenceInContext}" (Cụm từ "${key}" mang nghĩa: ${val.meaningVi}).` : defaultSentenceVi;
+
         return {
           originalText: cleanText,
           ...val,
           vietnameseMeaning: val.meaningVi,
           sourceContext: context || undefined,
+          highlightedWord: key,
+          highlightedWordMeaning: val.meaningVi,
+          highlightedWordRole: 'Cụm từ then chốt xác định ý nghĩa của mệnh đề',
+          fullSentence,
+          fullSentenceMeaning,
+          sentenceStructureAnalysis: `Phân tích câu: Sử dụng cụm "${key}" (${val.typeLabel}) làm trọng tâm ngữ pháp.`,
+          keyVocabularyInSentence: [
+            { word: key, phonetic: val.phonetic, type: val.typeLabel, meaning: val.meaningVi }
+          ],
         };
       }
     }
   }
 
-  // 3. Sentence analysis heuristic (4+ words or explicit sentence punctuation)
-  if (words.length >= 4 || cleanText.includes('.') || cleanText.includes('?') || cleanText.includes('!')) {
+  // 4. Sentence analysis heuristic (4+ words or explicit sentence punctuation)
+  if (isSentenceInput) {
     const hasIf = /\bif\b/i.test(cleanText);
     const hasAlthough = /\b(although|even though|though|despite|in spite of)\b/i.test(cleanText);
     const hasPassive = /\b(is|are|was|were|been|being)\s+\w+(ed|en)\b/i.test(cleanText);
@@ -509,50 +612,85 @@ function generateLocalHighlightExplanation(cleanText: string, context?: string) 
     const hasWish = /\bwish(es)?\b/i.test(cleanText);
 
     let structureName = 'Cấu trúc câu hoàn chỉnh';
-    let tip = 'Xác định rõ chủ ngữ và động từ chính của câu để tránh nhầm lẫn các mệnh đề phụ.';
-    let explanation = `Câu văn tiếng Anh gồm ${words.length} từ. Cần chú ý sự hòa hợp giữa chủ ngữ và vị ngữ cũng như mối liên kết giữa các vế câu.`;
+    let tip = 'Xác định rõ chủ ngữ (S) và động từ chính (V) của câu để không nhầm lẫn mệnh đề phụ.';
+    let explanation = `Câu văn tiếng Anh gồm ${words.length} từ. Cần chú ý sự hòa hợp giữa chủ ngữ và vị ngữ cũng như liên kết giữa các vế câu.`;
+    let structureBreakdown = 'Cấu trúc câu: S + V + O / Mệnh đề bổ ngữ hoàn chỉnh.';
+    let highlightedWordItem = words[0] || cleanText;
 
     if (hasIf) {
       structureName = 'Mẫu câu điều kiện (Conditional Sentence)';
       tip = 'Kiểm tra xem câu là loại 1 (có thật ở hiện tại/tương lai), loại 2 (giả định trái hiện tại) hay loại 3 (trái quá khứ).';
       explanation = 'Mệnh đề If nêu lên điều kiện, mệnh đề chính nêu kết quả tương ứng. Chú ý cấu trúc: If + S + V, S + will/would + V.';
+      structureBreakdown = 'If + S + V (mệnh đề điều kiện), S + modal verb + V-nguyên mẫu (mệnh đề chính).';
+      highlightedWordItem = 'if (câu điều kiện)';
     } else if (hasAlthough) {
       structureName = 'Mệnh đề chỉ sự nhượng bộ (Concession Clause)';
       tip = 'Nhớ rằng sau Although/Even though là Mệnh đề (S + V), còn sau Despite/In spite of là Cụm danh từ hoặc V-ing.';
       explanation = 'Biểu thị sự đối lập tương phản giữa hai hành động, hành động ở vế chính vẫn diễn ra bất chấp vế phụ.';
+      structureBreakdown = 'Although / Even though + S + V, S + V (hoặc In spite of / Despite + Noun/V-ing).';
+      highlightedWordItem = 'although / in spite of (sự nhượng bộ)';
     } else if (hasPassive) {
       structureName = 'Câu bị động (Passive Voice)';
       tip = 'Công thức cốt lõi: S + be + V3/V-ed (+ by O). Luôn chia to be đúng thì và đúng số của chủ ngữ mới.';
       explanation = 'Nhấn mạnh vào đối tượng chịu tác động của hành động thay vì người thực hiện.';
+      structureBreakdown = 'S + to be (chia theo thì) + Past Participle (V3/V-ed) + (by O).';
+      highlightedWordItem = 'passive voice (cấu trúc bị động be + V3)';
     } else if (hasSuggest) {
       structureName = 'Cấu trúc câu gợi ý (Suggest / Recommendation)';
       tip = 'Ghi nhớ 2 dạng: S + suggest + V-ing HOẶC S + suggest + (that) + S + (should) + V-nguyên thể.';
       explanation = 'Dùng để đưa ra lời khuyên hoặc gợi ý một phương án hành động.';
+      structureBreakdown = 'S + suggest + V-ing HOẶC S + suggest (that) S + (should) + V-bare.';
+      highlightedWordItem = 'suggest (gợi ý, đề xuất)';
     } else if (hasWish) {
       structureName = 'Câu ước với WISH (Subjunctive Mood)';
       tip = 'Ước ở hiện tại lùi về Quá khứ đơn (to be dùng were cho mọi ngôi). Ước tương lai dùng would/could + V.';
       explanation = 'Diễn tả mong muốn một điều gì đó trái ngược với thực tế ở hiện tại hoặc tương lai.';
+      structureBreakdown = 'S + wish(es) + S + V-past / were (ước trái ngược hiện tại).';
+      highlightedWordItem = 'wish (câu ước)';
     }
+
+    const keyVocabs = words
+      .filter((w) => w.length >= 4 && !['that', 'this', 'with', 'from', 'have', 'were', 'been'].includes(w))
+      .slice(0, 3)
+      .map((w) => {
+        const entry = lookupDictionaryWord(w);
+        return {
+          word: w,
+          phonetic: entry?.phonetic || `/${w}/`,
+          type: entry?.typeLabel || 'Từ vựng trong câu',
+          meaning: entry?.meaningVi || `Từ khóa "${w}" xuất hiện trong câu.`,
+        };
+      });
 
     return {
       originalText: cleanText,
       type: 'sentence',
       typeLabel: structureName,
-      vietnameseMeaning: `Ý nghĩa câu: "${cleanText}" (Diễn đạt trọn vẹn một mệnh đề/tình huống).`,
+      vietnameseMeaning: `Ý nghĩa cả câu: "${cleanText}" (Mệnh đề tiếng Anh hoàn chỉnh).`,
       detailedExplanation: explanation,
-      grammarBreakdown: `Phân tích: Câu chứa ${words.length} từ. ${hasIf ? 'Có chứa liên từ điều kiện "If".' : ''} ${hasPassive ? 'Chứa cấu trúc bị động be + V3.' : ''}`,
+      grammarBreakdown: structureBreakdown,
       examples: [
-        { en: cleanText, vi: 'Câu nguyên văn đang được phân tích trong bài.' },
+        { en: cleanText, vi: 'Ý nghĩa của cả câu đang được phân tích.' },
         { en: 'Mastering sentence patterns will boost your score significantly.', vi: 'Làm chủ các mẫu câu này sẽ giúp bạn nâng cao điểm số rõ rệt.' }
       ],
       examTip: tip,
       difficultyLevel: 'Chuẩn Vào 10',
       sourceContext: context || undefined,
+      fullSentence: cleanText,
+      fullSentenceMeaning: `Dịch nghĩa cả câu: "${cleanText}"`,
+      sentenceStructureAnalysis: structureBreakdown,
+      highlightedWord: highlightedWordItem,
+      highlightedWordMeaning: `Cấu trúc ngữ pháp trọng tâm: ${structureName}`,
+      highlightedWordRole: 'Nòng cốt ngữ pháp quy định nghĩa của toàn bộ câu',
+      keyVocabularyInSentence: keyVocabs,
     };
   }
 
-  // 4. Multi-word phrase heuristic (2-3 words)
+  // 5. Multi-word phrase heuristic (2-3 words)
   if (words.length >= 2) {
+    const defaultSentence = sentenceInContext || `It is essential to understand how "${cleanText}" functions in standard English.`;
+    const defaultSentenceVi = sentenceInContext ? `Ý nghĩa câu: "${sentenceInContext}"` : `Việc hiểu rõ cách dùng cụm từ "${cleanText}" trong tiếng Anh chuẩn là rất cần thiết.`;
+
     return {
       originalText: cleanText,
       type: 'phrase',
@@ -563,15 +701,24 @@ function generateLocalHighlightExplanation(cleanText: string, context?: string) 
       grammarBreakdown: `Cấu trúc cụm: Gồm ${words.length} từ đi liền nhau tạo thành ngữ nghĩa hoàn chỉnh trong ngữ cảnh bài thi.`,
       collocations: [`learn "${cleanText}"`, `use "${cleanText}" in context`],
       examples: [
-        { en: `It is helpful to memorize "${cleanText}" in full context.`, vi: `Ghi nhớ cụm từ "${cleanText}" trong ngữ cảnh hoàn chỉnh sẽ giúp bạn làm bài tự tin hơn.` }
+        { en: defaultSentence, vi: defaultSentenceVi }
       ],
       examTip: 'Trong bài thi vào 10, chú ý giới từ đi kèm hoặc từ loại đứng trước/sau cụm từ này.',
       difficultyLevel: 'Chuẩn Vào 10',
       sourceContext: context || undefined,
+      highlightedWord: cleanText,
+      highlightedWordMeaning: `Cụm từ: "${cleanText}"`,
+      highlightedWordRole: 'Cụm từ ngữ nghĩa trong câu',
+      fullSentence: defaultSentence,
+      fullSentenceMeaning: defaultSentenceVi,
+      sentenceStructureAnalysis: `Cụm từ "${cleanText}" kết hợp cùng các thành phần câu để tạo nên ý nghĩa mạch lạc.`,
+      keyVocabularyInSentence: [
+        { word: cleanText, phonetic: `/${lower}/`, type: 'Cụm từ (Phrase)', meaning: `Cụm từ: "${cleanText}"` }
+      ],
     };
   }
 
-  // 5. Single word heuristic
+  // 6. Single word heuristic
   const isAdverb = lower.endsWith('ly') && words.length === 1;
   const isNoun = (lower.endsWith('tion') || lower.endsWith('ment') || lower.endsWith('ness') || lower.endsWith('ity')) && words.length === 1;
   const isAdjective = (lower.endsWith('ful') || lower.endsWith('able') || lower.endsWith('ive') || lower.endsWith('ous') || lower.endsWith('al')) && words.length === 1;
@@ -598,22 +745,79 @@ function generateLocalHighlightExplanation(cleanText: string, context?: string) 
     detailNote = 'Dùng trong thì quá khứ đơn, các thì hoàn thành hoặc câu bị động.';
   }
 
+  const defaultSentence = sentenceInContext || `You should practice using the word "${cleanText}" regularly in daily conversations.`;
+  const defaultSentenceVi = sentenceInContext ? `Ý nghĩa ngữ cảnh câu: "${sentenceInContext}".` : `Bạn nên luyện tập sử dụng từ "${cleanText}" thường xuyên trong các cuộc trò chuyện hàng ngày.`;
+
   return {
     originalText: cleanText,
     type: 'word',
     typeLabel: partOfSpeech,
     phonetic: `/${lower}/`,
-    vietnameseMeaning: `Từ vựng: "${cleanText}" - ${detailNote}`,
+    vietnameseMeaning: `Từ vựng: "${cleanText}" (${partOfSpeech})`,
     detailedExplanation: `Từ "${cleanText}" là một mục từ cốt lõi. Hãy chú ý vị trí đứng trong câu và từ loại đi cùng để chia đúng dạng ngữ pháp (Word Formation).`,
     grammarBreakdown: `Phân loại từ: ${partOfSpeech}. Nhận diện hình thái từ căn cứ theo hậu tố và ngữ cảnh sử dụng.`,
     collocations: [`learn ${lower}`, `use ${lower} effectively`, `${lower} in context`],
     examples: [
-      { en: `It is essential to understand how "${cleanText}" is used in examinations.`, vi: `Hiểu rõ cách dùng "${cleanText}" trong các kỳ thi là điều vô cùng cần thiết.` },
-      { en: `Practice making sentences with "${cleanText}" to remember it longer.`, vi: `Hãy luyện tập đặt câu với "${cleanText}" để ghi nhớ từ vựng lâu hơn.` }
+      { en: defaultSentence, vi: defaultSentenceVi }
     ],
     examTip: 'Trong bài thi vào 10, chú ý dạng bài Cấu Tạo Từ (Word Formation): xác định chỗ trống cần Danh từ, Động từ, Tính từ hay Trạng từ.',
     difficultyLevel: 'Chuẩn Vào 10',
     sourceContext: context || undefined,
+    highlightedWord: cleanText,
+    highlightedWordMeaning: `Nghĩa từ vựng: "${cleanText}"`,
+    highlightedWordRole: `Đóng vai trò ${partOfSpeech} trong câu`,
+    fullSentence: defaultSentence,
+    fullSentenceMeaning: defaultSentenceVi,
+    sentenceStructureAnalysis: `Từ vựng "${cleanText}" được dùng trong cấu trúc câu hoàn chỉnh để biểu đạt ý nghĩa rõ ràng.`,
+    keyVocabularyInSentence: [
+      { word: cleanText, phonetic: `/${lower}/`, type: partOfSpeech, meaning: `Nghĩa từ vựng "${cleanText}"` }
+    ],
+  };
+}
+
+// Asynchronous resolver that performs live online translation if dictionary misses
+async function resolveHighlightExplanationAsync(cleanText: string, context?: string) {
+  // First get base explanation
+  const base = generateLocalHighlightExplanation(cleanText, context);
+  const strippedText = (cleanText || '').replace(/^[\s“"‘'(\[]+|[\s”"’')\].,;:!?]+$/g, '').trim();
+  const hasSentenceContext = context && context.trim().length > 10;
+  const sentenceInContext = hasSentenceContext ? context!.trim() : '';
+
+  // If the word had a direct dictionary match, we already have high-quality meaning
+  const dictMatch = lookupDictionaryWord(strippedText);
+
+  // If sentenceInContext exists and doesn't have a real translation yet, translate it!
+  let translatedSentenceVi: string | null = null;
+  if (sentenceInContext) {
+    translatedSentenceVi = await fetchOnlineTranslation(sentenceInContext);
+  }
+
+  // If the word was not in dictionary (or is a sentence), translate online!
+  let translatedWordVi: string | null = null;
+  if (!dictMatch) {
+    translatedWordVi = await fetchOnlineTranslation(strippedText);
+  }
+
+  // Assemble perfected results
+  const finalWordMeaning = dictMatch?.meaningVi || translatedWordVi || base.highlightedWordMeaning;
+  const finalSentence = sentenceInContext || base.fullSentence;
+  const finalSentenceMeaning = translatedSentenceVi || (dictMatch && !sentenceInContext ? base.fullSentenceMeaning : (translatedSentenceVi || base.fullSentenceMeaning));
+
+  return {
+    ...base,
+    vietnameseMeaning: finalWordMeaning,
+    highlightedWordMeaning: finalWordMeaning,
+    fullSentence: finalSentence,
+    fullSentenceMeaning: finalSentenceMeaning,
+    examples: base.examples && base.examples.length > 0 ? [
+      {
+        en: finalSentence,
+        vi: finalSentenceMeaning,
+      },
+      ...base.examples.slice(1)
+    ] : [
+      { en: finalSentence, vi: finalSentenceMeaning }
+    ],
   };
 }
 
@@ -656,7 +860,7 @@ async function startServer() {
       const ai = getGeminiClient(keyToUse);
       const testResp = await withTimeout(
         ai.models.generateContent({
-          model: 'gemini-3.1-flash-lite',
+          model: 'gemini-3.5-flash',
           contents: 'Xin chào Gemini AI. Trả lời một từ: OK',
         }),
         15000,
@@ -1043,8 +1247,16 @@ QUY TẮC BẮT BUỘC:
       });
     } catch (err: any) {
       console.error('[AI Chat Error]', err);
-      return res.status(500).json({
-        error: 'Lỗi từ mô hình AI: ' + (err?.message || 'Không thể xử lý yêu cầu lúc này.'),
+      const errMsg = String(err?.message || '');
+      const isQuota = errMsg.includes('quota') || errMsg.includes('RESOURCE_EXHAUSTED') || err?.status === 429;
+      return res.json({
+        thinking: isQuota
+          ? 'Hạn ngạch AI dùng chung của máy chủ hiện đã đạt giới hạn. Đã chuyển sang chế độ hỗ trợ giải đáp trực tiếp.'
+          : 'Đang khởi tạo câu trả lời dự phòng.',
+        answer: isQuota
+          ? `Máy chủ hiện đã đạt giới hạn hạn ngạch Gemini dùng chung. Để tiếp tục trò chuyện và nhận câu trả lời tư duy chuyên sâu không giới hạn, bạn hãy bấm vào nút **🔑 API Key** ở thanh menu để thêm khóa Google Gemini API cá nhân (hoàn toàn miễn phí từ Google AI Studio) nhé!`
+          : `Xin lỗi, kết nối tới AI đang gặp gián đoạn tạm thời: ${errMsg || 'Vui lòng thử lại sau ít phút.'}`,
+        suggestedFollowUps: ['Làm sao để lấy Gemini API Key miễn phí?', 'Các cấu trúc ngữ pháp trọng tâm đề thi vào 10'],
       });
     }
   });
@@ -1117,8 +1329,16 @@ YÊU CẦU:
       });
     } catch (err: any) {
       console.error('[Study AI Tutor Error]', err);
-      return res.status(500).json({
-        error: 'Lỗi kết nối AI: ' + (err?.message || 'Không thể phản hồi'),
+      const errMsg = String(err?.message || '');
+      const isQuota = errMsg.includes('quota') || errMsg.includes('RESOURCE_EXHAUSTED') || err?.status === 429;
+      return res.json({
+        thinking: isQuota
+          ? 'Hạn ngạch AI dùng chung của máy chủ hiện đã đạt giới hạn. Đã chuyển sang chế độ gia sư tự động.'
+          : 'Đang tạo phản hồi gia sư.',
+        reply: isQuota
+          ? `Hệ thống vừa chạm giới hạn hạn ngạch tạm thời của máy chủ. Bạn có thể nhấn nút **🔑 API Key** ở thanh công cụ để thêm khóa Google Gemini API cá nhân (miễn phí 100% từ Google AI Studio) để học tập không giới hạn nhé!`
+          : `Rất tiếc, AI tạm thời chưa thể phản hồi: ${errMsg || 'Vui lòng thử lại sau.'}`,
+        suggestedFollowUps: ['Cấu trúc trọng tâm bài này là gì?', 'Cho tôi 3 ví dụ thực tế'],
       });
     }
   });
@@ -1293,7 +1513,8 @@ Hãy trả về kết quả bằng JSON theo schema quy định.`;
       const hasKey = !!(userKey || process.env.GEMINI_API_KEY);
 
       if (!hasKey) {
-        return res.json(generateLocalHighlightExplanation(cleanText, context));
+        const result = await resolveHighlightExplanationAsync(cleanText, context);
+        return res.json(result);
       }
 
       try {
@@ -1302,25 +1523,32 @@ Hãy trả về kết quả bằng JSON theo schema quy định.`;
 Người học vừa DÙNG TÍNH NĂNG HIGHLIGHT (bôi đen / chọn) một chữ, cụm từ hoặc câu tiếng Anh sau đây:
 "${cleanText}"
 
-Ngữ cảnh xung quanh (nếu có): "${context || 'Trong đề thi / bài học tiếng Anh'}"
+Ngữ cảnh câu chứa từ này (nếu có): "${context || ''}"
 Bối cảnh chuyên đề: "${unitContext || 'Chương trình Tiếng Anh Lớp 8 - Ôn thi vào 10 THPT'}"
 
-NHIỆM VỤ CỦA BẠN:
-Phân tích và giải nghĩa thật chính xác, sư phạm, dễ hiểu và truyền cảm hứng.
-1. Xác định đúng dạng:
-   - 'word': từ đơn lẻ
-   - 'phrase': cụm từ, phrasal verb, collocation
-   - 'idiom': thành ngữ
-   - 'sentence': câu đơn, câu ghép, câu phức
-   - 'grammar_structure': cấu trúc ngữ pháp
-2. Dịch nghĩa tiếng Việt súc tích nhưng chuẩn xác theo ngữ cảnh.
-3. Phiên âm IPA chuẩn quốc tế (nếu là từ/cụm từ).
-4. Phân tích ngữ pháp chi tiết:
-   - Nếu là từ: từ loại (noun, verb, adj, adv...), dạng số nhiều, bất quy tắc, giới từ đi kèm.
-   - Nếu là câu: phân tích cấu trúc chủ ngữ (S), vị ngữ (V), tân ngữ (O), thì (tense), mệnh đề (clause), câu điều kiện/bị động/đảo ngữ nếu có.
-5. Cung cấp 2 ví dụ thực tế song ngữ Anh - Việt.
-6. Từ đồng nghĩa (synonyms), từ trái nghĩa (antonyms), collocations liên quan (nếu có).
-7. Mẹo làm bài thi tuyển sinh vào lớp 10 (examTip): cách nhận biết, tránh bẫy đề thi của Sở GD&ĐT, lỗi học sinh hay sai.
+YÊU CẦU ĐẶC BIỆT CỐT LÕI TỪ NGƯỜI DÙNG:
+"Tôi muốn tính năng highlight này thể hiện rõ: ý nghĩa của cả câu, từ vựng highlight".
+Do đó, bạn BẮT BUỘC phải phân tích và thể hiện RÕ RÀNG HAI PHẦN:
+
+PHẦN 1: Ý NGHĨA CỦA CẢ CÂU (fullSentence & fullSentenceMeaning)
+- 'fullSentence': Cả câu tiếng Anh hoàn chỉnh chứa từ/cụm từ đang highlight (nếu context có câu thì lấy câu trong context, nếu chỉ có từ đơn lẻ thì hãy tạo một câu tiếng Anh mẫu mực chuẩn đề thi vào 10 chứa từ này).
+- 'fullSentenceMeaning': Dịch toàn bộ câu tiếng Anh đó sang tiếng Việt một cách chuẩn xác, tự nhiên, sát nghĩa và đúng ngữ cảnh thi vào 10.
+- 'sentenceStructureAnalysis': Phân tích ngắn gọn nhưng sáng rõ cấu trúc ngữ pháp của cả câu (Ví dụ: "S + V + O", thì hiện tại hoàn thành, mệnh đề quan hệ, câu điều kiện loại 2, câu bị động...).
+
+PHẦN 2: TỪ VỰNG HIGHLIGHT (highlightedWord & highlightedWordMeaning)
+- 'highlightedWord': Chính xác từ vựng hoặc cụm từ được highlight (nếu người dùng bôi 1 từ thì là từ đó; nếu bôi cả câu thì chọn từ vựng trọng tâm nhất trong câu).
+- 'highlightedWordMeaning': Ý nghĩa tiếng Việt cốt lõi, cô đọng và chuẩn xác nhất của riêng từ vựng được highlight.
+- 'highlightedWordRole': Vai trò ngữ pháp của từ vựng này trong câu (ví dụ: "Đóng vai trò tân ngữ trực tiếp sau động từ", "Tính từ vị ngữ sau to be", "Trạng từ bổ nghĩa cho động từ chính"...).
+- 'typeLabel': Từ loại bằng tiếng Việt (ví dụ: "Danh từ (Noun)", "Cụm động từ (Phrasal Verb)", "Tính từ (Adjective)", "Thành ngữ (Idiom)").
+- 'phonetic': Phiên âm IPA chuẩn quốc tế kèm trọng âm (ví dụ: "/ˈher.ɪ.tɪdʒ/").
+- 'keyVocabularyInSentence': Mảng gồm 2-4 từ vựng trọng tâm nổi bật trong câu kèm phiên âm, từ loại và nghĩa (đặc biệt hữu ích khi người học bôi cả câu hoặc muốn học thêm từ vựng xung quanh).
+
+NGOÀI RA CUNG CẤP THÊM:
+- 'collocations': 2-3 cụm từ đi liền hay gặp trong đề thi vào 10.
+- 'synonyms': 2-3 từ đồng nghĩa.
+- 'antonyms': 1-2 từ trái nghĩa.
+- 'examples': 2 ví dụ song ngữ Anh - Việt.
+- 'examTip': Mẹo làm bài thi tuyển sinh vào 10 liên quan đến từ/cấu trúc này (bẫy chia động từ, giới từ, phát âm, từ loại...).
 
 Hãy trả về JSON theo đúng schema quy định.`;
 
@@ -1338,6 +1566,26 @@ Hãy trả về JSON theo đúng schema quy định.`;
                 vietnameseMeaning: { type: Type.STRING, description: 'Nghĩa tiếng Việt chuẩn ngữ cảnh' },
                 detailedExplanation: { type: Type.STRING, description: 'Giải thích chi tiết về nghĩa và cách dùng' },
                 grammarBreakdown: { type: Type.STRING, description: 'Phân tích ngữ pháp, thành phần câu hoặc từ loại' },
+                // 🌟 HAI PHẦN TRỌNG TÂM: Ý NGHĨA CẢ CÂU & TỪ VỰNG HIGHLIGHT
+                fullSentence: { type: Type.STRING, description: 'Câu tiếng Anh trọn vẹn chứa từ vựng' },
+                fullSentenceMeaning: { type: Type.STRING, description: 'Ý nghĩa tiếng Việt hoàn chỉnh của cả câu' },
+                sentenceStructureAnalysis: { type: Type.STRING, description: 'Phân tích cấu trúc ngữ pháp cả câu' },
+                highlightedWord: { type: Type.STRING, description: 'Từ vựng được highlight' },
+                highlightedWordMeaning: { type: Type.STRING, description: 'Ý nghĩa của riêng từ vựng highlight' },
+                highlightedWordRole: { type: Type.STRING, description: 'Vai trò ngữ pháp của từ vựng trong câu' },
+                keyVocabularyInSentence: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      word: { type: Type.STRING },
+                      phonetic: { type: Type.STRING },
+                      type: { type: Type.STRING },
+                      meaning: { type: Type.STRING },
+                    },
+                    required: ['word', 'meaning'],
+                  },
+                },
                 collocations: {
                   type: Type.ARRAY,
                   items: { type: Type.STRING },
@@ -1368,7 +1616,7 @@ Hãy trả về JSON theo đúng schema quy định.`;
                 examTip: { type: Type.STRING, description: 'Mẹo thi tuyển sinh vào 10' },
                 difficultyLevel: { type: Type.STRING, description: 'Độ khó, ví dụ: "Chuẩn Vào 10", "Chuyên Anh"' }
               },
-              required: ['originalText', 'type', 'typeLabel', 'vietnameseMeaning', 'detailedExplanation', 'examples']
+              required: ['originalText', 'type', 'typeLabel', 'vietnameseMeaning', 'detailedExplanation', 'fullSentence', 'fullSentenceMeaning', 'highlightedWord', 'highlightedWordMeaning', 'examples']
             }
           }
         }, 10000);
@@ -1384,15 +1632,18 @@ Hãy trả về JSON theo đúng schema quy định.`;
           });
         }
 
-        return res.json(generateLocalHighlightExplanation(cleanText, context));
+        const localFallback = await resolveHighlightExplanationAsync(cleanText, context);
+        return res.json(localFallback);
       } catch (geminiErr: any) {
         console.log('[Highlight AI Notice] Gemini fallback to local explanation engine:', geminiErr?.message);
-        return res.json(generateLocalHighlightExplanation(cleanText, context));
+        const localFallback = await resolveHighlightExplanationAsync(cleanText, context);
+        return res.json(localFallback);
       }
     } catch (err: any) {
       console.error('[Highlight Explainer Error]', err);
       // Guarantee valid JSON is always returned even on unexpected exceptions!
-      return res.json(generateLocalHighlightExplanation(req.body?.text || '', req.body?.context));
+      const fallback = await resolveHighlightExplanationAsync(req.body?.text || '', req.body?.context);
+      return res.json(fallback);
     }
   });
 

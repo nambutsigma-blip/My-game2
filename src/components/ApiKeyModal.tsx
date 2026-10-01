@@ -245,7 +245,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onKey
 
         {/* Modal Footer */}
         <div className="p-3 sm:p-4 border-t border-slate-800 bg-slate-950/80 flex items-center justify-between text-[11px] text-slate-500 shrink-0">
-          <span>Hỗ trợ Gemini 3.1 Flash-Lite & Gemini Flash</span>
+          <span>Hỗ trợ Gemini Model 3.5 (Gemini 3.5 Flash & Gemini 3.5 Flash-Lite)</span>
           <button
             onClick={onClose}
             className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs cursor-pointer transition-colors"

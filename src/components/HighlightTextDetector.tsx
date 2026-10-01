@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { AiHighlightResult, HighlightColor, SavedHighlightItem } from '../types';
 import { getAiHeaders } from '../utils/aiClientHelper';
+import { lookupDictionaryWord } from '../data/dictionaryData';
 
 interface HighlightTextDetectorProps {
   onTriggerHighlight: (selectedText: string, contextSentence?: string) => void;
@@ -529,17 +530,35 @@ export const HighlightTextDetector: React.FC<HighlightTextDetectorProps> = ({
           if (rect.width === 0 && rect.height === 0) return;
 
           let context = '';
-          if (range.startContainer && range.startContainer.textContent) {
-            context = range.startContainer.textContent.trim();
+          try {
+            const container = range.commonAncestorContainer;
+            const parentEl = container.nodeType === Node.TEXT_NODE ? container.parentElement : (container as HTMLElement);
+            const blockEl = parentEl?.closest('p, div, li, h1, h2, h3, h4, h5, h6, blockquote, td, tr') || parentEl;
+            const rawBlockText = ((blockEl as HTMLElement)?.innerText || blockEl?.textContent || container.textContent || '').trim();
+
+            if (rawBlockText) {
+              const sentences = rawBlockText
+                .split(/(?<=[.?!;])\s+|\n+/)
+                .map((s) => s.trim())
+                .filter(Boolean);
+              const matched = sentences.find((s) => s.toLowerCase().includes(rawText.toLowerCase()));
+              context = matched || (sentences.length > 0 ? sentences[0] : rawBlockText);
+            } else if (range.startContainer && range.startContainer.textContent) {
+              context = range.startContainer.textContent.trim();
+            }
+          } catch {
+            if (range.startContainer && range.startContainer.textContent) {
+              context = range.startContainer.textContent.trim();
+            }
           }
 
-          // Calculate popover coordinates (width is 340px)
-          const popoverWidth = Math.min(350, window.innerWidth - 24);
-          const popoverHeight = 220; // approximate height
+          // Calculate popover coordinates (width is 370px)
+          const popoverWidth = Math.min(380, window.innerWidth - 20);
+          const popoverHeight = 310; // approximate height for dual-focus card
 
           let popoverX = rect.left + rect.width / 2 - popoverWidth / 2;
           // Clamp inside viewport
-          popoverX = Math.max(12, Math.min(window.innerWidth - popoverWidth - 12, popoverX));
+          popoverX = Math.max(10, Math.min(window.innerWidth - popoverWidth - 10, popoverX));
 
           let popoverY = rect.top - popoverHeight - 12;
           let arrowPosition: 'bottom' | 'top' = 'bottom';
@@ -617,9 +636,50 @@ export const HighlightTextDetector: React.FC<HighlightTextDetectorProps> = ({
       return;
     }
 
-    // 2. Check instant client dictionary for 0ms response
-    if (INSTANT_CLIENT_DICT[cleanKey]) {
+    // 2. Check rich dictionary (A1-C1 core vocabulary & irregular verbs) for 0ms instant response
+    const dictLookup = lookupDictionaryWord(cleanKey) || lookupDictionaryWord(rawClean);
+    if (dictLookup) {
+      const sentence = context && context.trim().length > 10 ? context.trim() : (dictLookup.examples?.[0]?.en || `You should pay attention to ${rawClean}.`);
+      const sentenceVi = context && context.trim().length > 10 ? `Ý nghĩa câu trong ngữ cảnh: "${context.trim()}"` : (dictLookup.examples?.[0]?.vi || `Ý nghĩa câu mẫu chứa từ vựng.`);
+
+      const instantRes: AiHighlightResult = {
+        originalText: rawClean,
+        type: dictLookup.type,
+        typeLabel: dictLookup.typeLabel,
+        phonetic: dictLookup.phonetic,
+        vietnameseMeaning: dictLookup.meaningVi,
+        detailedExplanation: dictLookup.detailedExplanation || dictLookup.meaningVi,
+        examples: dictLookup.examples || [],
+        synonyms: dictLookup.synonyms,
+        antonyms: dictLookup.antonyms,
+        collocations: dictLookup.collocations,
+        examTip: dictLookup.examTip,
+        difficultyLevel: dictLookup.difficultyLevel || 'Chuẩn Vào 10',
+        highlightedWord: rawClean,
+        highlightedWordMeaning: dictLookup.meaningVi,
+        highlightedWordRole: dictLookup.type === 'word' ? 'Từ vựng cốt lõi trong câu' : 'Cụm từ trọng tâm',
+        fullSentence: sentence,
+        fullSentenceMeaning: sentenceVi,
+        sentenceStructureAnalysis: `Phân tích câu: Dùng từ/cụm "${rawClean}" (${dictLookup.typeLabel}) làm trọng tâm ngữ pháp.`,
+        sourceContext: context,
+      };
+      setMeaningResult(instantRes);
+      cacheRef.current.set(cleanKey, instantRes);
+      setIsLoadingMeaning(false);
+      checkIfSaved(rawClean);
+
+      // If there's context sentence, continue to enrich in background asynchronously
+      if (!context || context.trim().length <= 10) {
+        return;
+      }
+    }
+
+    // 3. Check instant client dictionary for 0ms response
+    if (!dictLookup && INSTANT_CLIENT_DICT[cleanKey]) {
       const dictItem = INSTANT_CLIENT_DICT[cleanKey];
+      const sentence = context && context.trim().length > 10 ? context.trim() : (dictItem.exampleEn || `We should pay attention to ${rawClean}.`);
+      const sentenceVi = context && context.trim().length > 10 ? `Ý nghĩa ngữ cảnh: "${context.trim()}"` : (dictItem.exampleVi || `Ý nghĩa câu mẫu chứa từ vựng.`);
+
       const instantRes: AiHighlightResult = {
         originalText: rawClean,
         type: dictItem.type,
@@ -630,6 +690,13 @@ export const HighlightTextDetector: React.FC<HighlightTextDetectorProps> = ({
         examples: dictItem.exampleEn
           ? [{ en: dictItem.exampleEn, vi: dictItem.exampleVi || '' }]
           : [],
+        highlightedWord: rawClean,
+        highlightedWordMeaning: dictItem.meaningVi,
+        highlightedWordRole: dictItem.type === 'word' ? 'Từ vựng cốt lõi trong câu' : 'Cụm từ trọng tâm',
+        fullSentence: sentence,
+        fullSentenceMeaning: sentenceVi,
+        sentenceStructureAnalysis: `Phân tích câu: Sử dụng cụm "${rawClean}" tạo nên ý nghĩa chuẩn xác trong câu.`,
+        sourceContext: context,
       };
       setMeaningResult(instantRes);
       cacheRef.current.set(cleanKey, instantRes);
@@ -641,6 +708,9 @@ export const HighlightTextDetector: React.FC<HighlightTextDetectorProps> = ({
     // Also check multi-word phrase matches in client dict
     for (const [key, dictItem] of Object.entries(INSTANT_CLIENT_DICT)) {
       if (key.includes(' ') && (cleanKey === key || cleanKey.includes(key))) {
+        const sentence = context && context.trim().length > 10 ? context.trim() : (dictItem.exampleEn || `The students were able to ${key}.`);
+        const sentenceVi = context && context.trim().length > 10 ? `Ý nghĩa câu trong ngữ cảnh: "${context.trim()}"` : (dictItem.exampleVi || `Ý nghĩa câu chứa cụm từ.`);
+
         const instantRes: AiHighlightResult = {
           originalText: rawClean,
           type: dictItem.type,
@@ -651,6 +721,13 @@ export const HighlightTextDetector: React.FC<HighlightTextDetectorProps> = ({
           examples: dictItem.exampleEn
             ? [{ en: dictItem.exampleEn, vi: dictItem.exampleVi || '' }]
             : [],
+          highlightedWord: key,
+          highlightedWordMeaning: dictItem.meaningVi,
+          highlightedWordRole: 'Cụm từ then chốt trong câu',
+          fullSentence: sentence,
+          fullSentenceMeaning: sentenceVi,
+          sentenceStructureAnalysis: `Phân tích câu: Dùng cụm từ "${key}" làm trung tâm ngữ nghĩa.`,
+          sourceContext: context,
         };
         setMeaningResult(instantRes);
         cacheRef.current.set(cleanKey, instantRes);
@@ -704,6 +781,9 @@ export const HighlightTextDetector: React.FC<HighlightTextDetectorProps> = ({
         throw new Error(data?.error || 'API failed');
       }
 
+      const defaultSentence = context && context.trim().length > 10 ? context.trim() : (data.examples && data.examples[0] ? data.examples[0].en : rawClean);
+      const defaultSentenceVi = data.fullSentenceMeaning || (data.examples && data.examples[0] ? data.examples[0].vi : data.vietnameseMeaning);
+
       const finalResult: AiHighlightResult = {
         originalText: data.originalText || rawClean,
         type: data.type || (cleanKey.includes(' ') ? 'phrase' : 'word'),
@@ -719,6 +799,14 @@ export const HighlightTextDetector: React.FC<HighlightTextDetectorProps> = ({
         examTip: data.examTip,
         difficultyLevel: data.difficultyLevel,
         sourceContext: context,
+        // 🌟 RÕ RÀNG 2 MỤC: Ý NGHĨA CẢ CÂU & TỪ VỰNG HIGHLIGHT
+        highlightedWord: data.highlightedWord || rawClean,
+        highlightedWordMeaning: data.highlightedWordMeaning || data.vietnameseMeaning || data.meaningVi || `Nghĩa từ vựng: "${rawClean}"`,
+        highlightedWordRole: data.highlightedWordRole,
+        fullSentence: data.fullSentence || defaultSentence,
+        fullSentenceMeaning: defaultSentenceVi,
+        sentenceStructureAnalysis: data.sentenceStructureAnalysis || data.grammarBreakdown,
+        keyVocabularyInSentence: Array.isArray(data.keyVocabularyInSentence) ? data.keyVocabularyInSentence : undefined,
       };
 
       setMeaningResult(finalResult);
@@ -727,13 +815,25 @@ export const HighlightTextDetector: React.FC<HighlightTextDetectorProps> = ({
     } catch {
       // Graceful fallback display if network issue or offline
       const wordsCount = cleanKey.split(/\s+/).filter(Boolean).length;
+      const dictFallback = lookupDictionaryWord(cleanKey) || lookupDictionaryWord(rawClean);
+      const sentence = context && context.trim().length > 10 ? context.trim() : (dictFallback?.examples?.[0]?.en || `You should pay close attention to "${rawClean}".`);
+      const wordMeaning = dictFallback?.meaningVi || `Nghĩa của từ: "${rawClean}"`;
+      const sentenceMeaning = context && context.trim().length > 10
+        ? `Ý nghĩa câu: "${context.trim()}" (Từ vựng "${rawClean}": ${wordMeaning})`
+        : (dictFallback?.examples?.[0]?.vi || `Dịch câu: Hãy chú ý kỹ đến từ này.`);
+
       const fallback: AiHighlightResult = {
         originalText: rawClean,
-        type: wordsCount >= 2 ? 'phrase' : 'word',
-        typeLabel: wordsCount >= 2 ? 'Cụm từ tiếng Anh' : 'Từ vựng tiếng Anh',
-        vietnameseMeaning: `Cụm từ / Từ vựng: "${rawClean}"`,
-        detailedExplanation: `Bạn có thể bấm "Phân tích sâu" để xem chi tiết mẹo thi tuyển sinh vào 10 cho cấu trúc này.`,
-        examples: [],
+        type: dictFallback?.type || (wordsCount >= 2 ? 'phrase' : 'word'),
+        typeLabel: dictFallback?.typeLabel || (wordsCount >= 2 ? 'Cụm từ tiếng Anh' : 'Từ vựng tiếng Anh'),
+        phonetic: dictFallback?.phonetic,
+        vietnameseMeaning: wordMeaning,
+        detailedExplanation: dictFallback?.detailedExplanation || `Giải nghĩa từ vựng: ${wordMeaning}. Bạn có thể bấm "Phân tích sâu" để xem chi tiết mẹo thi tuyển sinh vào 10.`,
+        examples: [{ en: sentence, vi: sentenceMeaning }],
+        highlightedWord: rawClean,
+        highlightedWordMeaning: wordMeaning,
+        fullSentence: sentence,
+        fullSentenceMeaning: sentenceMeaning,
       };
       setMeaningResult(fallback);
     } finally {
@@ -796,6 +896,9 @@ export const HighlightTextDetector: React.FC<HighlightTextDetectorProps> = ({
           color: highlightColor,
           examples: meaningResult.examples,
           examTip: meaningResult.examTip,
+          highlightedWordMeaning: meaningResult.highlightedWordMeaning || meaningResult.vietnameseMeaning,
+          fullSentence: meaningResult.fullSentence,
+          fullSentenceMeaning: meaningResult.fullSentenceMeaning,
         };
         list = [newItem, ...list];
         setIsSaved(true);
@@ -803,6 +906,37 @@ export const HighlightTextDetector: React.FC<HighlightTextDetectorProps> = ({
       localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  // Helper to render sentence with highlighted word marker
+  const renderHighlightedSnippet = (sentence: string, targetWord: string, dotClass: string) => {
+    if (!sentence) return null;
+    if (!targetWord) return sentence;
+    const cleanWord = targetWord.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (!cleanWord) return sentence;
+    try {
+      const regex = new RegExp(`(${cleanWord})`, 'gi');
+      const parts = sentence.split(regex);
+      return (
+        <span>
+          {parts.map((part, i) => {
+            if (part.toLowerCase() === targetWord.toLowerCase().trim()) {
+              return (
+                <mark
+                  key={i}
+                  className={`px-1 rounded font-bold text-slate-950 ${dotClass} shadow-sm inline-block`}
+                >
+                  {part}
+                </mark>
+              );
+            }
+            return <span key={i}>{part}</span>;
+          })}
+        </span>
+      );
+    } catch {
+      return sentence;
     }
   };
 
@@ -822,10 +956,13 @@ export const HighlightTextDetector: React.FC<HighlightTextDetectorProps> = ({
   // Copy meaning
   const handleCopyMeaning = () => {
     if (!meaningResult) return;
-    const textToCopy = `${meaningResult.originalText} ${
+    const wordPart = `${meaningResult.highlightedWord || meaningResult.originalText} ${
       meaningResult.phonetic || ''
-    }: ${meaningResult.vietnameseMeaning}`;
-    navigator.clipboard.writeText(textToCopy);
+    }: ${meaningResult.highlightedWordMeaning || meaningResult.vietnameseMeaning}`;
+    const sentencePart = meaningResult.fullSentence
+      ? `\nCả câu: "${meaningResult.fullSentence}"\nÝ nghĩa cả câu: ${meaningResult.fullSentenceMeaning || ''}`
+      : '';
+    navigator.clipboard.writeText(`${wordPart}${sentencePart}`);
     setIsCopied(true);
     setTimeout(() => setIsCopied(false), 2000);
   };
@@ -882,47 +1019,86 @@ export const HighlightTextDetector: React.FC<HighlightTextDetectorProps> = ({
             <div className="py-4 space-y-2 animate-pulse text-center">
               <div className="flex items-center justify-center gap-2 text-xs font-semibold text-amber-300">
                 <Sparkles className="w-4 h-4 animate-spin text-amber-400" />
-                <span>AI đang phân tích nghĩa tức thì...</span>
+                <span>AI đang phân tích nghĩa từ vựng & toàn câu...</span>
               </div>
               <div className="h-3 bg-slate-800 rounded-full w-4/5 mx-auto"></div>
               <div className="h-2.5 bg-slate-850 rounded-full w-3/5 mx-auto"></div>
             </div>
           ) : meaningResult ? (
-            <div className="space-y-2">
-              {/* Type Badge & Phonetic */}
-              <div className="flex items-center flex-wrap gap-1.5 text-[11px]">
-                <span
-                  className={`px-2 py-0.5 rounded-md font-bold ${currentColorConfig.badgeBg} ${currentColorConfig.badgeText} border ${currentColorConfig.accentBorder}`}
-                >
-                  {meaningResult.typeLabel || 'Từ vựng'}
-                </span>
-                {meaningResult.phonetic && (
-                  <span className="font-mono text-slate-400 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">
-                    {meaningResult.phonetic}
+            <div className="space-y-2.5 max-h-[360px] overflow-y-auto pr-0.5 custom-scrollbar">
+              {/* PHẦN 1: 🎯 TỪ VỰNG HIGHLIGHT */}
+              <div className="p-2.5 rounded-xl bg-slate-900/95 border border-slate-700/80 shadow-sm space-y-1.5">
+                <div className="flex items-center justify-between gap-1.5 text-[10px] font-black uppercase tracking-wider text-amber-400">
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                    <span>1. TỪ VỰNG HIGHLIGHT</span>
                   </span>
-                )}
-              </div>
+                  <span
+                    className={`px-1.5 py-0.2 rounded font-bold ${currentColorConfig.badgeBg} ${currentColorConfig.badgeText} border ${currentColorConfig.accentBorder} text-[9px]`}
+                  >
+                    {meaningResult.typeLabel || 'Từ vựng'}
+                  </span>
+                </div>
 
-              {/* VIETNAMESE MEANING (Direct, large, bold, crystal-clear!) */}
-              <div className="bg-slate-900/90 border border-slate-700/60 rounded-xl p-2.5 shadow-inner">
-                <p className="text-sm font-extrabold text-amber-200 leading-snug">
-                  {meaningResult.vietnameseMeaning}
-                </p>
-              </div>
-
-              {/* Short Example if available */}
-              {meaningResult.examples && meaningResult.examples.length > 0 && (
-                <div className="text-[11px] text-slate-300 bg-slate-900/40 border border-slate-850 rounded-lg p-2 space-y-0.5">
-                  <p className="italic text-slate-200">
-                    &ldquo;{meaningResult.examples[0].en}&rdquo;
-                  </p>
-                  {meaningResult.examples[0].vi && (
-                    <p className="text-slate-400 font-medium">
-                      ↳ {meaningResult.examples[0].vi}
-                    </p>
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="text-sm sm:text-base font-black text-white">
+                    {meaningResult.highlightedWord || meaningResult.originalText}
+                  </span>
+                  {meaningResult.phonetic && (
+                    <span className="text-[11px] font-mono text-amber-300/90 bg-slate-950 px-1.5 py-0.2 rounded border border-slate-800">
+                      {meaningResult.phonetic}
+                    </span>
                   )}
                 </div>
-              )}
+
+                {/* Nghĩa riêng biệt của từ vựng */}
+                <div className="bg-amber-950/40 border border-amber-500/40 rounded-lg p-2">
+                  <div className="text-[9px] uppercase tracking-wider font-extrabold text-amber-400/90 mb-0.5">
+                    Nghĩa từ vựng:
+                  </div>
+                  <div className="text-xs sm:text-sm font-extrabold text-amber-200 leading-snug">
+                    {meaningResult.highlightedWordMeaning || meaningResult.vietnameseMeaning}
+                  </div>
+                </div>
+              </div>
+
+              {/* PHẦN 2: 📜 Ý NGHĨA CỦA CẢ CÂU */}
+              <div className="p-2.5 rounded-xl bg-indigo-950/40 border border-indigo-500/40 shadow-sm space-y-1.5">
+                <div className="flex items-center justify-between gap-1 text-[10px] font-black uppercase tracking-wider text-indigo-300">
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-indigo-400"></span>
+                    <span>2. Ý NGHĨA CỦA CẢ CÂU</span>
+                  </span>
+                  <button
+                    onClick={() => handleSpeak(meaningResult.fullSentence || popover.context || meaningResult.originalText)}
+                    disabled={isPlayingAudio}
+                    className="flex items-center gap-1 text-[10px] text-indigo-300 hover:text-white bg-indigo-900/60 hover:bg-indigo-900 px-2 py-0.5 rounded cursor-pointer transition-colors"
+                    title="Nghe phát âm cả câu"
+                  >
+                    <Volume2 className="w-3 h-3" />
+                    <span>Nghe câu</span>
+                  </button>
+                </div>
+
+                {/* Câu tiếng Anh có highlight từ vựng */}
+                <div className="text-[11px] sm:text-xs text-slate-200 font-medium italic leading-relaxed bg-slate-950/80 p-2 rounded-lg border border-slate-800">
+                  &ldquo;{renderHighlightedSnippet(
+                    meaningResult.fullSentence || popover.context || (meaningResult.examples?.[0]?.en) || meaningResult.originalText,
+                    meaningResult.highlightedWord || meaningResult.originalText,
+                    currentColorConfig.dot
+                  )}&rdquo;
+                </div>
+
+                {/* Dịch nghĩa của cả câu */}
+                <div className="bg-indigo-950/70 border border-indigo-700/60 rounded-lg p-2">
+                  <div className="text-[9px] uppercase tracking-wider font-extrabold text-indigo-300/90 mb-0.5">
+                    Dịch nghĩa cả câu:
+                  </div>
+                  <div className="text-xs sm:text-[13px] font-bold text-white leading-snug">
+                    {meaningResult.fullSentenceMeaning || (meaningResult.examples?.[0]?.vi) || meaningResult.vietnameseMeaning}
+                  </div>
+                </div>
+              </div>
             </div>
           ) : (
             <div className="py-2 text-xs text-slate-400 text-center">

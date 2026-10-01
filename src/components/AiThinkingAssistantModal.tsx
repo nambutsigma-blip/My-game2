@@ -315,7 +315,7 @@ export const AiThinkingAssistantModal: React.FC<AiThinkingAssistantModalProps> =
                 </h3>
                 <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
                   <Sparkles className="w-3 h-3 text-emerald-400" />
-                  Gemini 3.8 Flash • Không Hardcode
+                  Gemini 3.5 Flash • Không Hardcode
                 </span>
               </div>
               <p className="text-xs text-slate-400 flex items-center gap-1">

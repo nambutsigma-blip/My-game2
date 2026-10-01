@@ -465,6 +465,15 @@ export interface AiHighlightResult {
   examTip?: string; // Mẹo thi vào 10
   difficultyLevel?: string;
   sourceContext?: string;
+
+  // 🌟 Cốt lõi yêu cầu người dùng: Thể hiện rõ Ý NGHĨA CỦA CẢ CÂU và TỪ VỰNG HIGHLIGHT
+  highlightedWord?: string; // Từ vựng / Cụm từ được highlight
+  highlightedWordMeaning?: string; // Ý nghĩa chuẩn xác của riêng từ vựng được highlight
+  highlightedWordRole?: string; // Vai trò ngữ pháp của từ vựng trong câu
+  fullSentence?: string; // Câu tiếng Anh trọn vẹn chứa từ vựng này
+  fullSentenceMeaning?: string; // Ý nghĩa tiếng Việt hoàn chỉnh của cả câu
+  sentenceStructureAnalysis?: string; // Phân tích cấu trúc cả câu (Chủ ngữ, Vị ngữ, Thì...)
+  keyVocabularyInSentence?: { word: string; phonetic?: string; type?: string; meaning: string }[]; // Các từ vựng trọng tâm trong câu
 }
 
 export interface SavedHighlightItem {
@@ -479,6 +488,11 @@ export interface SavedHighlightItem {
   notes?: string;
   examples?: { en: string; vi: string }[];
   examTip?: string;
+
+  // 🌟 Lưu trữ kèm cả câu & từ vựng để ôn tập sổ tay
+  highlightedWordMeaning?: string;
+  fullSentence?: string;
+  fullSentenceMeaning?: string;
 }
 
 // 🌍 Native Speaker / Foreigner AI Conversation Types

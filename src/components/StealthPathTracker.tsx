@@ -99,7 +99,7 @@ const StealthPathTrackerComponent: React.FC<StealthPathTrackerProps> = ({
                 <span className={`text-[10px] mt-1.5 font-semibold transition-colors ${
                   isCurrent ? 'text-amber-300 font-bold' : isPassed ? 'text-emerald-400' : 'text-slate-500'
                 }`}>
-                  {idx === 0 ? 'Cổng' : isLast ? 'Trứng' : `Bước ${idx}`}
+                  {idx === 0 ? 'Cổng' : isLast ? 'Trứng' : isCurrent ? `${idx}` : <span className="hidden sm:inline">{idx}</span>}
                 </span>
 
                 {/* Tooltip on hover */}
