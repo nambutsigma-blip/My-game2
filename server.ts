@@ -1812,13 +1812,13 @@ NHIỆM VỤ CỦA BẠN:
   // API 8: Generate Dynamic Custom Foreign Native Persona (100% Do AI Tạo Mới, Không Hardcode)
   app.post('/api/ai-generate-persona', async (req, res) => {
     try {
-      const { topic, country, difficulty = 'B1', customPrompt } = req.body;
+      const { topic, country, difficulty = 'B1', customPrompt, customGender, customVoiceStyle } = req.body;
 
       const userKey = extractApiKey(req);
       const hasKey = !!(userKey || process.env.GEMINI_API_KEY);
 
       if (!hasKey) {
-        // Fallback generated persona
+        // Fallback generated persona with distinct voice
         return res.json({
           id: `custom_${Date.now()}`,
           name: 'Sarah Jenkins',
@@ -1826,12 +1826,17 @@ NHIỆM VỤ CỦA BẠN:
           nationality: 'Vương Quốc Anh (UK)',
           countryCode: 'GB',
           voiceLang: 'en-GB',
-          accentName: 'British RP Accent',
+          accentName: 'British RP Accent (London)',
           roleTitle: 'Giáo viên trẻ & Yêu thích âm nhạc indie',
           personality: 'Dịu dàng, phát âm chuẩn Anh - Anh, thích đọc tiểu thuyết',
           targetLevel: difficulty,
           topic: topic || 'Cuộc sống hàng ngày & Văn hóa nghệ thuật',
           greeting: 'Hello there! Lovely to meet you. What would you like to talk about today?',
+          gender: 'female',
+          voicePitch: 1.08,
+          voiceRate: 0.95,
+          voiceToneLabel: 'Giọng nữ chuẩn London RP thanh lịch',
+          samplePhrase: 'Splendid! Lovely to meet you.',
           isAiCustom: true
         });
       }
@@ -1839,26 +1844,33 @@ NHIỆM VỤ CỦA BẠN:
       const ai = getGeminiClient(userKey);
 
       const prompt = `Bạn là Chuyên gia Ngôn ngữ & Thiết kế Nhân vật Giao tiếp Tiếng Anh.
-Nhiệm vụ: Hãy tạo ra MỘT NHÂN VẬT NGƯỜI NƯỚC NGOÀI / BẢN XỨ HOÀN TOÀN MỚI, ĐỘC ĐÁO, THÚ VỊ, KHÔNG TRÙNG LẶP, KHÔNG HARDCODE.
+Nhiệm vụ: Hãy tạo ra MỘT NHÂN VẬT NGƯỜI NƯỚC NGOÀI / BẢN XỨ HOÀN TOÀN MỚI, ĐỘC ĐÁO, THÚ VỊ, KHÔNG TRÙNG LẶP, CÓ CHẤT GIỌNG ĐẶC TRƯNG RIÊNG.
 
 YÊU CẦU:
 - Chủ đề thảo luận: "${topic || 'Trò chuyện tự do, sở thích, trường học hoặc du lịch'}"
-- Quốc gia mong muốn: "${country || 'Ngẫu nhiên trong các nước nói tiếng Anh: USA, UK, Australia, Canada, Ireland, Singapore, New Zealand'}"
+- Quốc gia / Nguồn gốc mong muốn: "${country || 'Ngẫu nhiên trong các nước nói tiếng Anh: USA, UK, Australia, Canada, Ireland, Singapore, New Zealand, Scotland, South Africa, India'}"
+- Giới tính mong muốn: "${customGender || 'Tự do theo nhân vật'}"
+- Phong cách giọng nói mong muốn: "${customVoiceStyle || 'Tự nhiên theo quốc gia'}"
 - Trình độ CEFR: "${difficulty || 'B1'}"
 - Yêu cầu thêm (nếu có): "${customPrompt || 'Không có'}"
 
 Hãy trả về JSON với các trường:
 - name: Tên người bản xứ chân thực (ví dụ: "Lucas Vance", "Chloe Bennett", "Oliver Smith", "Maya Lin")
 - avatar: Một biểu tượng cảm xúc duy nhất đại diện sinh động (ví dụ: "👨‍💻", "👩‍🎨", "🏄‍♂️", "👩‍🔬", "✈️", "☕")
-- nationality: Quốc tịch tiếng Việt kèm mã (ví dụ: "Hoa Kỳ (USA)", "Vương Quốc Anh (UK)", "Úc (Australia)", "Canada", "Singapore")
-- countryCode: Mã quốc gia 2 ký tự: 'US' | 'GB' | 'AU' | 'CA' | 'SG' | 'NZ' | 'IE'
-- voiceLang: Mã giọng chuẩn cho Web Speech API: 'en-US' | 'en-GB' | 'en-AU' | 'en-CA' | 'en-IE'
-- accentName: Tên chất giọng (ví dụ: "California American Accent", "London British Accent", "Sydney Aussie Accent")
+- nationality: Quốc tịch tiếng Việt kèm mã (ví dụ: "Hoa Kỳ (USA)", "Vương Quốc Anh (UK)", "Úc (Australia)", "Canada", "Ireland", "New Zealand", "Scotland", "Nam Phi (South Africa)", "Ấn Độ (India)")
+- countryCode: Mã quốc gia 2 ký tự: 'US' | 'GB' | 'AU' | 'CA' | 'SG' | 'NZ' | 'IE' | 'ZA' | 'IN'
+- voiceLang: Mã giọng chuẩn cho Web Speech API: 'en-US' | 'en-GB' | 'en-AU' | 'en-CA' | 'en-IE' | 'en-NZ' | 'en-ZA' | 'en-IN'
+- accentName: Tên chất giọng đặc trưng (ví dụ: "California American Accent", "London British Accent", "Dublin Irish Accent", "Sydney Aussie Accent")
 - roleTitle: Nghề nghiệp hoặc vai trò thú vị (ví dụ: "Nhiếp ảnh gia đường phố ở Chicago", "Sinh viên ngành Thiết kế đồ họa tại London")
 - personality: Miêu tả tính cách sinh động bằng tiếng Việt
 - targetLevel: 'A2' | 'B1' | 'B2' | 'C1'
 - topic: Tên chủ đề trò chuyện
-- greeting: Câu chào mở đầu bằng tiếng Anh cực kỳ tự nhiên, cuốn hút và mời gọi người học trả lời.`;
+- greeting: Câu chào mở đầu bằng tiếng Anh cực kỳ tự nhiên, cuốn hút và mang phong thái vùng miền của nhân vật
+- gender: 'male' hoặc 'female'
+- voicePitch: Số thực điều chỉnh cao độ giọng (từ 0.82 đến 1.15; ví dụ 0.85 cho giọng nam trầm, 1.08 cho giọng nữ trong trẻo)
+- voiceRate: Số thực tốc độ nói (từ 0.90 đến 1.05)
+- voiceToneLabel: Miêu tả ngắn về chất giọng (ví dụ: "Giọng nam trầm ấm, hào sảng", "Giọng nữ thanh lịch, rõ ràng")
+- samplePhrase: Một câu nói cửa miệng ngắn (catchphrase) đặc trưng của nhân vật`;
 
       const response = await callGeminiWithFallback(ai, {
         contents: prompt,
@@ -1877,9 +1889,14 @@ Hãy trả về JSON với các trường:
               personality: { type: Type.STRING },
               targetLevel: { type: Type.STRING },
               topic: { type: Type.STRING },
-              greeting: { type: Type.STRING }
+              greeting: { type: Type.STRING },
+              gender: { type: Type.STRING, description: '"male" or "female"' },
+              voicePitch: { type: Type.NUMBER, description: 'Pitch between 0.8 and 1.2' },
+              voiceRate: { type: Type.NUMBER, description: 'Rate between 0.9 and 1.1' },
+              voiceToneLabel: { type: Type.STRING },
+              samplePhrase: { type: Type.STRING }
             },
-            required: ['name', 'avatar', 'nationality', 'countryCode', 'voiceLang', 'accentName', 'roleTitle', 'personality', 'targetLevel', 'topic', 'greeting']
+            required: ['name', 'avatar', 'nationality', 'countryCode', 'voiceLang', 'accentName', 'roleTitle', 'personality', 'targetLevel', 'topic', 'greeting', 'gender', 'voicePitch', 'voiceRate', 'voiceToneLabel']
           }
         }
       }, 25000);
@@ -1889,6 +1906,10 @@ Hãy trả về JSON với các trường:
         return res.json({
           ...parsed,
           id: `custom_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+          gender: parsed.gender === 'female' ? 'female' : 'male',
+          voicePitch: typeof parsed.voicePitch === 'number' ? parsed.voicePitch : (parsed.gender === 'female' ? 1.08 : 0.9),
+          voiceRate: typeof parsed.voiceRate === 'number' ? parsed.voiceRate : 0.95,
+          voiceToneLabel: parsed.voiceToneLabel || (parsed.gender === 'female' ? 'Giọng nữ tự nhiên' : 'Giọng nam trầm ấm'),
           isAiCustom: true
         });
       }
@@ -1906,6 +1927,11 @@ Hãy trả về JSON với các trường:
         targetLevel: difficulty,
         topic: topic || 'Du lịch, văn hóa và sở thích khám phá',
         greeting: "Hi there! I'm Jordan. Ready to dive into some fun English conversation today?",
+        gender: 'male',
+        voicePitch: 0.92,
+        voiceRate: 0.98,
+        voiceToneLabel: 'Giọng nam Mỹ trẻ trung, năng động',
+        samplePhrase: "Hey, let's catch up!",
         isAiCustom: true
       });
     } catch (err: any) {
@@ -1920,9 +1946,14 @@ Hãy trả về JSON với các trường:
         accentName: 'American General Accent',
         roleTitle: 'Du học sinh & Nhiếp ảnh gia tự do',
         personality: 'Nhiệt tình, dễ gần, thích du lịch khám phá và ẩm thực',
-        targetLevel: req.body?.difficulty || 'B1',
-        topic: req.body?.topic || 'Du lịch, văn hóa và sở thích khám phá',
+        targetLevel: 'B1',
+        topic: 'Du lịch và sở thích khám phá',
         greeting: "Hi there! I'm Jordan. Ready to dive into some fun English conversation today?",
+        gender: 'male',
+        voicePitch: 0.92,
+        voiceRate: 0.98,
+        voiceToneLabel: 'Giọng nam Mỹ trẻ trung, năng động',
+        samplePhrase: "Hey, let's catch up!",
         isAiCustom: true
       });
     }

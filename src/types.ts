@@ -501,15 +501,24 @@ export interface ForeignPersona {
   name: string;
   avatar: string; // Emoji avatar or avatar icon
   nationality: string; // e.g. "Hoa Kỳ (USA)", "Vương Quốc Anh (UK)", "Úc (Australia)", "Canada", "Singapore"
-  countryCode: string; // 'US' | 'GB' | 'AU' | 'CA' | 'SG'
-  voiceLang: string; // 'en-US' | 'en-GB' | 'en-AU' | 'en-CA'
-  accentName: string; // e.g. "American Accent", "British RP Accent", "Australian Accent"
+  countryCode: string; // 'US' | 'GB' | 'AU' | 'CA' | 'SG' | 'IE' | 'NZ' | 'ZA' | 'IN' | 'JP' | 'FR'
+  voiceLang: string; // 'en-US' | 'en-GB' | 'en-AU' | 'en-CA' | 'en-IE' | 'en-NZ' | 'en-ZA' | 'en-IN'
+  accentName: string; // e.g. "California American Accent", "British RP Accent", "Dublin Irish Accent"
   roleTitle: string; // e.g. "Sinh viên Đại học Stanford & Gamer", "Giáo viên Văn học London"
   personality: string; // e.g. "Nhiệt tình, hài hước, thân thiện, dùng nhiều tiếng lóng tự nhiên"
   targetLevel: 'A2' | 'B1' | 'B2' | 'C1';
   topic: string; // e.g. "Cuộc sống học đường & Sở thích", "Luyện phỏng vấn", "Du lịch & Ẩm thực"
   greeting: string; // Opening line generated dynamically by AI
   isAiCustom?: boolean;
+
+  // 🎙️ Specific voice customization by origin and character
+  gender?: 'male' | 'female';
+  voicePitch?: number; // 0.7 to 1.3 (0.85 = trầm ấm nam tính, 1.1 = trong trẻo nữ tính)
+  voiceRate?: number; // 0.85 to 1.15
+  voiceToneLabel?: string; // e.g. "Giọng nam trầm ấm, hào sảng", "Giọng nữ trong trẻo, thanh lịch"
+  preferredVoiceNames?: string[]; // Hints for Web Speech API matching
+  region?: 'north_america' | 'europe_uk' | 'oceania' | 'asia_other';
+  samplePhrase?: string; // Catchphrase or sample audio snippet
 }
 
 export interface ConversationGrammarCorrection {
