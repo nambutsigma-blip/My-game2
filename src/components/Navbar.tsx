@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { HelpCircle, Flame, Egg, Swords, ChevronLeft, ChevronRight, Sparkles, Zap, BookOpen, Globe, Palette, RotateCcw, Edit3, User, Brain, LogIn, Mail, Check, Target, Highlighter, Key } from 'lucide-react';
+import { HelpCircle, Flame, Egg, Swords, ChevronLeft, ChevronRight, Sparkles, Zap, BookOpen, Globe, Palette, RotateCcw, Edit3, User, Brain, LogIn, Mail, Check, Target, Highlighter, Key, Volume2, VolumeX, FileText } from 'lucide-react';
 import { UnitData, StolenEgg } from '../types';
 import { AppUser } from '../utils/authHelper';
 import { hasCustomApiKey } from '../utils/aiClientHelper';
+import { isAudioMuted, toggleAudioMute } from '../utils/soundEffects';
 
 interface NavbarProps {
   units: UnitData[];
@@ -21,7 +22,6 @@ interface NavbarProps {
   onStartChaseMode: () => void;
   dragonCrystals?: number;
   activePerksCount?: number;
-  onOpenAppearanceStudio?: () => void;
   onOpenPokemonPvP?: () => void;
   pendingGiftsCount?: number;
   onResetAllAccounts?: () => void;
@@ -37,6 +37,7 @@ interface NavbarProps {
   onOpenDailyMissions?: () => void;
   dailyMissionsCompleted?: number;
   hasUnclaimedDailyRewards?: boolean;
+  onOpenMockExam?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -55,7 +56,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   onStartChaseMode,
   dragonCrystals = 0,
   activePerksCount = 0,
-  onOpenAppearanceStudio,
   onOpenPokemonPvP,
   pendingGiftsCount = 0,
   onResetAllAccounts,
@@ -71,16 +71,30 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenDailyMissions,
   dailyMissionsCompleted = 0,
   hasUnclaimedDailyRewards = false,
+  onOpenMockExam,
 }) => {
   const [hasCustomKey, setHasCustomKey] = useState<boolean>(() => hasCustomApiKey());
+  const [isMuted, setIsMuted] = useState<boolean>(() => isAudioMuted());
 
   useEffect(() => {
     const handleKeyUpdate = () => {
       setHasCustomKey(hasCustomApiKey());
     };
+    const handleMuteUpdate = () => {
+      setIsMuted(isAudioMuted());
+    };
     window.addEventListener('egg_thief_api_key_updated', handleKeyUpdate);
-    return () => window.removeEventListener('egg_thief_api_key_updated', handleKeyUpdate);
+    window.addEventListener('egg_thief_sound_mute_changed', handleMuteUpdate);
+    return () => {
+      window.removeEventListener('egg_thief_api_key_updated', handleKeyUpdate);
+      window.removeEventListener('egg_thief_sound_mute_changed', handleMuteUpdate);
+    };
   }, []);
+
+  const handleToggleMute = () => {
+    const next = toggleAudioMute();
+    setIsMuted(next);
+  };
   const currentIndex = units.findIndex((u) => u.id === currentUnitId);
   const prevUnit = currentIndex > 0 ? units[currentIndex - 1] : null;
   const nextUnit = currentIndex < units.length - 1 ? units[currentIndex + 1] : null;
@@ -191,8 +205,31 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
         </div>
 
-        {/* Quick Top Controls (Crystals, API Key badge, Account/Login) */}
+        {/* Quick Top Controls (Sound Mute, Crystals, API Key badge, Account/Login) */}
         <div className="flex items-center gap-1.5 shrink-0">
+          {/* Global Sound Mute Toggle */}
+          <button
+            onClick={handleToggleMute}
+            className={`p-1 sm:px-2.5 sm:py-1 rounded-xl border text-xs font-bold flex items-center gap-1 cursor-pointer transition-all active:scale-95 shadow-sm ${
+              isMuted
+                ? 'bg-rose-950/80 border-rose-500/60 text-rose-300'
+                : 'bg-slate-900 border-slate-700 text-slate-300 hover:text-white'
+            }`}
+            title={isMuted ? 'Đang tắt âm thanh (Nhấp để bật)' : 'Đang bật âm thanh (Nhấp để tắt)'}
+          >
+            {isMuted ? (
+              <>
+                <VolumeX className="w-3.5 h-3.5 text-rose-400" />
+                <span className="hidden sm:inline text-[11px]">Tắt âm</span>
+              </>
+            ) : (
+              <>
+                <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="hidden sm:inline text-[11px]">Âm thanh</span>
+              </>
+            )}
+          </button>
+
           {/* Dragon Crystals Wallet */}
           <div
             onClick={onOpenHatchery}
@@ -345,6 +382,22 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
         )}
 
+        {/* Official 45-Minute 50-Question Mock Exam Button */}
+        {onOpenMockExam && (
+          <button
+            id="nav-mock-exam-btn"
+            onClick={onOpenMockExam}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-neutral-900 via-stone-900 to-neutral-950 hover:from-neutral-800 border-2 border-stone-400 text-xs font-black text-white cursor-pointer transition-all active:scale-95 shadow-md shadow-black/80 shrink-0 group ring-1 ring-stone-500/50"
+            title="Thi Thử 45 Phút Chuẩn 50 Câu (Thang Điểm 10.0 - Nhận Trứng King/Titan)"
+          >
+            <FileText className="w-3.5 h-3.5 text-stone-200 group-hover:scale-110 transition-transform" />
+            <span className="font-serif tracking-tight">Thi Thử 45P (50 Câu)</span>
+            <span className="text-[10px] px-1.5 py-0.2 rounded bg-stone-100 text-neutral-950 font-black font-sans">
+              👑 Trứng King+
+            </span>
+          </button>
+        )}
+
         {/* Study & AI Tutor Button */}
         <button
           id="nav-study-btn"
@@ -404,19 +457,6 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <Swords className="w-3.5 h-3.5 text-yellow-300" />
             <span>Pet PvP</span>
-          </button>
-        )}
-
-        {/* Pet Appearance Studio Button */}
-        {onOpenAppearanceStudio && (
-          <button
-            id="nav-appearance-btn"
-            onClick={onOpenAppearanceStudio}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-indigo-950/90 to-purple-950/90 hover:from-indigo-900 border border-indigo-500/50 text-xs font-bold text-indigo-200 cursor-pointer transition-all active:scale-95 shadow-sm shrink-0"
-            title="Ngoại Hình Pet"
-          >
-            <Palette className="w-3.5 h-3.5 text-indigo-400" />
-            <span>Ngoại Hình</span>
           </button>
         )}
 

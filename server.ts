@@ -53,11 +53,11 @@ function delay(ms: number): Promise<void> {
 }
 
 async function callGeminiWithFallback(ai: GoogleGenAI, requestConfig: any, timeoutMs = 30000) {
-  // Upgraded to Gemini Model 3.5 (gemini-3.5-flash, gemini-3.5-flash-lite) with graceful high-speed fallback
+  // Upgraded to official Gemini models (gemini-3.8-flash, gemini-flash-latest, gemini-3.1-flash-lite)
   const candidateModels = [
-    'gemini-3.5-flash',
-    'gemini-3.5-flash-lite',
+    'gemini-3.8-flash',
     'gemini-flash-latest',
+    'gemini-3.1-flash-lite',
   ];
   let lastErr: any = null;
 
@@ -860,7 +860,7 @@ async function startServer() {
       const ai = getGeminiClient(keyToUse);
       const testResp = await withTimeout(
         ai.models.generateContent({
-          model: 'gemini-3.5-flash',
+          model: 'gemini-3.8-flash',
           contents: 'Xin chào Gemini AI. Trả lời một từ: OK',
         }),
         15000,

@@ -3,6 +3,7 @@ import { Sparkles, Swords, Shield, Heart, Award, X, RotateCcw, Check, Zap, Crown
 import confetti from 'canvas-confetti';
 import { PetCompanion } from '../types';
 import { EvolvedPetSprite, getElementAuraColors } from './EvolvedPetSprite';
+import { PokemonPetVisual } from './PokemonPetVisual';
 import { CelestialEvolutionBurst } from './CelestialEvolutionBurst';
 import { calculatePetStats } from '../data/arenaData';
 import { getRarityConfig } from '../data/creaturesData';
@@ -259,9 +260,9 @@ export const PetEvolutionModal: React.FC<PetEvolutionModalProps> = ({
             {/* Metamorphosis Before & After Transformation Banner */}
             <div className="flex items-center justify-center gap-3 p-3 rounded-2xl bg-slate-900/90 border border-amber-400/50 max-w-lg mx-auto">
               <div className="flex items-center gap-2">
-                <span className="text-3xl p-1.5 rounded-xl bg-slate-950 border border-slate-800 shadow-inner">
-                  {oldPet.avatarIcon}
-                </span>
+                <div className="w-12 h-12 rounded-xl bg-slate-950 border border-slate-800 shadow-inner overflow-hidden flex items-center justify-center shrink-0">
+                  <PokemonPetVisual pet={oldPet} size="xs" showAura={false} showShadow={false} showTitleBadge={false} />
+                </div>
                 <div className="text-left">
                   <div className="text-[10px] text-slate-400 font-bold uppercase">{oldRarityMeta.nameEn}</div>
                   <div className="text-xs font-bold text-slate-300 truncate max-w-[110px]">{oldPet.name}</div>
@@ -274,9 +275,9 @@ export const PetEvolutionModal: React.FC<PetEvolutionModalProps> = ({
               </div>
 
               <div className="flex items-center gap-2">
-                <span className="text-3xl p-1.5 rounded-xl bg-slate-950 border-2 border-yellow-400 shadow-lg shadow-yellow-400/40 animate-bounce">
-                  {pet.avatarIcon}
-                </span>
+                <div className="w-12 h-12 rounded-xl bg-slate-950 border-2 border-yellow-400 shadow-lg shadow-yellow-400/40 overflow-hidden flex items-center justify-center shrink-0">
+                  <PokemonPetVisual pet={pet} size="xs" showAura={false} showShadow={false} showTitleBadge={false} />
+                </div>
                 <div className="text-left">
                   <div className={`text-[10px] font-black uppercase ${newRarityMeta.badgeText}`}>
                     {newRarityMeta.icon} {newRarityMeta.nameEn} (Rank {pet.tierRank})

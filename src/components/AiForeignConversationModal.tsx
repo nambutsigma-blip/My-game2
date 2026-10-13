@@ -35,7 +35,7 @@ import {
   SavedConversationSession,
   ConversationGrammarCorrection,
 } from '../types';
-import { playSuccessChime, playLaser, playStealthStep } from '../utils/soundEffects';
+import { playSuccessChime, playLaser, playStealthStep, isAudioMuted } from '../utils/soundEffects';
 import { db, auth } from '../lib/firebase';
 import { collection, addDoc, getDocs, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { getAiHeaders, hasCustomApiKey } from '../utils/aiClientHelper';
@@ -263,7 +263,7 @@ export const AiForeignConversationModal: React.FC<AiForeignConversationModalProp
 
   // Speak AI reply via SpeechSynthesis
   const speakText = (text: string, voiceLang: string, customRate?: number) => {
-    if (!('speechSynthesis' in window)) return;
+    if (!('speechSynthesis' in window) || isAudioMuted()) return;
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = voiceLang || 'en-US';

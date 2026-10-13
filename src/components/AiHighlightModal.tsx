@@ -21,7 +21,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { AiHighlightResult, HighlightColor, SavedHighlightItem } from '../types';
-import { playSuccessChime, playLaser } from '../utils/soundEffects';
+import { playSuccessChime, playLaser, isAudioMuted } from '../utils/soundEffects';
 import { getAiHeaders } from '../utils/aiClientHelper';
 import { lookupDictionaryWord } from '../data/dictionaryData';
 
@@ -615,7 +615,7 @@ export const AiHighlightModal: React.FC<AiHighlightModalProps> = ({
   };
 
   const handleSpeak = (textToSpeak: string) => {
-    if (!('speechSynthesis' in window)) return;
+    if (!('speechSynthesis' in window) || isAudioMuted()) return;
     window.speechSynthesis.cancel();
 
     const utterance = new SpeechSynthesisUtterance(textToSpeak);

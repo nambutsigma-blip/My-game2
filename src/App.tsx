@@ -9,6 +9,7 @@ import { StageType, UnitData, StolenEgg, PetCompanion, GameState, SkillTreeState
 import { UNITS_DATA } from './data/unitsData';
 import { ExamPaper, fetchExamForUnit, getSeenSignatures } from './utils/examEngine';
 import { getEnchantmentConfig, CREATURES_CATALOG } from './data/creaturesData';
+import { getPetExclusiveAppearance } from './data/petAppearances';
 import { getEvolvedPetForm } from './utils/petEvolution';
 import { PET_SKILL_NODES, getPassiveBonuses, calculateTotalSpentCrystals } from './data/skillTreeData';
 import { Navbar } from './components/Navbar';
@@ -26,7 +27,6 @@ import { RulesModal } from './components/RulesModal';
 import { StudySystemModal } from './components/StudySystemModal';
 import { OnlineMultiplayerModal } from './components/OnlineMultiplayerModal';
 import { StealthPathTracker } from './components/StealthPathTracker';
-import { PetAppearanceStudioModal } from './components/PetAppearanceStudioModal';
 import { PokemonPvPArenaModal } from './components/PokemonPvPArenaModal';
 import { SetAccountNameModal } from './components/SetAccountNameModal';
 import { AiThinkingAssistantModal } from './components/AiThinkingAssistantModal';
@@ -38,6 +38,7 @@ import { HighlightTextDetector } from './components/HighlightTextDetector';
 import { AiForeignConversationModal } from './components/AiForeignConversationModal';
 import { ApiKeyModal } from './components/ApiKeyModal';
 import { MobileBottomNav } from './components/MobileBottomNav';
+import { OfficialMockExamModal } from './components/OfficialMockExamModal';
 import { hasCustomApiKey } from './utils/aiClientHelper';
 import { HighlightColor } from './types';
 import { getDailyMissionData } from './utils/dailyMissionManager';
@@ -90,8 +91,18 @@ export default function App() {
   });
 
   const [hatchedPets, setHatchedPets] = useState<PetCompanion[]>(() => {
+    const starterApp = getPetExclusiveAppearance({
+      id: 'starter-dragon-1',
+      name: 'Pyra Junior',
+      title: 'Young Flame Drake',
+      rarity: 'rare',
+      classification: 'living',
+      element: 'fire',
+    } as PetCompanion);
+
     const starterDragon: PetCompanion = {
       id: 'starter-dragon-1',
+      templateId: 'pet-king-ignis',
       name: 'Pyra Junior',
       title: 'Young Flame Drake',
       rarity: 'rare',
@@ -99,13 +110,15 @@ export default function App() {
       element: 'fire',
       buffDescription: 'Tăng tốc độ tìm kiếm kho báu lửa.',
       hatchedAt: new Date().toISOString(),
-      description: 'A loyal young wolf eager to assist explorers in their quest through the dragon sanctuary.',
+      description: 'A loyal young flame drake eager to assist explorers in their quest through the dragon sanctuary.',
       avatarIcon: '🔥',
       tierRank: 2,
       level: 1,
       exp: 0,
       maxExp: 100,
       enchantmentLevel: 0,
+      appearance: starterApp,
+      imageUrl: starterApp.customArtworkUrl,
     };
 
     try {
@@ -116,6 +129,15 @@ export default function App() {
       }
       // Remove any previously injected publisher/admin pets
       parsed = parsed.filter((p) => p.id !== 'publisher-lord-infinite' && !p.name.includes('Chúa Tể'));
+      // Auto-hydrate all pets with their dedicated unique appearances
+      parsed = parsed.map((p) => {
+        const exclusiveApp = getPetExclusiveAppearance(p);
+        return {
+          ...p,
+          appearance: exclusiveApp,
+          imageUrl: exclusiveApp.customArtworkUrl || p.imageUrl,
+        };
+      });
       return parsed.length > 0 ? parsed : [starterDragon];
     } catch {
       return [starterDragon];
@@ -216,9 +238,8 @@ export default function App() {
   const [isOnlineOpen, setIsOnlineOpen] = useState(false);
   const [isAiAssistantOpen, setIsAiAssistantOpen] = useState(false);
   const [isMissionCompleteOpen, setIsMissionCompleteOpen] = useState(false);
-  const [isAppearanceStudioOpen, setIsAppearanceStudioOpen] = useState(false);
-  const [selectedAppearancePetId, setSelectedAppearancePetId] = useState<string | null>(null);
   const [isPokemonPvPOpen, setIsPokemonPvPOpen] = useState(false);
+  const [isMockExamOpen, setIsMockExamOpen] = useState(false);
   const [pendingGiftsCount, setPendingGiftsCount] = useState(0);
 
   // Highlight AI Word & Sentence Explainer State
@@ -276,20 +297,6 @@ export default function App() {
       setHasUnclaimedDailyRewards(unclaimed);
     } catch {}
   }, [dailyMissionRefreshTrigger, isDailyMissionOpen]);
-
-  const handleSavePetAppearance = (petId: string, appearance: PetAppearance) => {
-    setHatchedPets((prev) =>
-      prev.map((pet) => {
-        if (pet.id === petId) {
-          return {
-            ...pet,
-            appearance,
-          };
-        }
-        return pet;
-      })
-    );
-  };
 
   // User Authentication & Account Name State
   const [currentUser, setCurrentUser] = useState<AppUser | User | null>(() => getStoredUser() || null);
@@ -1007,10 +1014,6 @@ export default function App() {
         onStartChaseMode={() => setIsChaseModeActive(true)}
         dragonCrystals={dragonCrystals}
         onResetAllAccounts={handleResetAllAccounts}
-        onOpenAppearanceStudio={() => {
-          setSelectedAppearancePetId(hatchedPets[0]?.id || null);
-          setIsAppearanceStudioOpen(true);
-        }}
         onOpenPokemonPvP={() => setIsPokemonPvPOpen(true)}
         pendingGiftsCount={pendingGiftsCount}
         accountName={accountName}
@@ -1025,6 +1028,7 @@ export default function App() {
         onOpenDailyMissions={() => setIsDailyMissionOpen(true)}
         dailyMissionsCompleted={dailyMissionsCompleted}
         hasUnclaimedDailyRewards={hasUnclaimedDailyRewards}
+        onOpenMockExam={() => setIsMockExamOpen(true)}
       />
 
       {/* Main Content Area */}
@@ -1069,6 +1073,19 @@ export default function App() {
 
               {/* Exam Actions & Difficulty Controls */}
               <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+                {/* 45-Minute 50-Question Official Entrance Exam */}
+                <button
+                  id="btn-open-official-50q-exam"
+                  onClick={() => setIsMockExamOpen(true)}
+                  className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-stone-900 via-neutral-900 to-black hover:from-stone-850 text-white font-serif font-black text-[11px] sm:text-xs border-2 border-stone-400 flex items-center gap-1.5 sm:gap-2 cursor-pointer shadow-lg active:scale-95 transition-all group ring-1 ring-stone-400/40"
+                  title="Mở Phòng Thi Thử 45 Phút Chuẩn 50 Câu Điểm 10.0 (Nhận Trứng King/Titan)"
+                >
+                  <span className="text-base sm:text-lg">📝</span>
+                  <span className="font-serif font-black tracking-tight">Thi Thử 45P (50 Câu)</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-400 text-slate-950 font-black font-sans">
+                    👑 Trứng King+
+                  </span>
+                </button>
                 <div className="flex bg-slate-950/80 p-0.5 sm:p-1 rounded-xl border border-slate-800">
                   <button
                     onClick={() => setExamDifficulty('standard')}
@@ -1302,19 +1319,13 @@ export default function App() {
         onSellPet={handleSellPet}
         onClaimFreeGift={handleClaimFreeGift}
         hasClaimedFreeGift={hasClaimedFreeGift}
-        onOpenAppearanceStudio={(petId) => {
-          if (petId) {
-            setSelectedAppearancePetId(petId);
-          }
-          setIsHatcheryOpen(false);
-          setIsAppearanceStudioOpen(true);
-        }}
         onOpenPokemonPvP={() => {
           setIsHatcheryOpen(false);
           setIsPokemonPvPOpen(true);
         }}
         onEvolvePet={handleEvolvePet}
         onLevelUpPet={handleLevelUpPet}
+        onAddStolenEgg={(egg) => setStolenEggs((prev) => [egg, ...prev])}
       />
 
       <PetArenaModal
@@ -1426,19 +1437,6 @@ export default function App() {
         onRetry={handleRetryMission}
       />
 
-      {/* Pet Appearance Studio Modal (Pokemon-style customizer) */}
-      <PetAppearanceStudioModal
-        isOpen={isAppearanceStudioOpen}
-        onClose={() => setIsAppearanceStudioOpen(false)}
-        pets={hatchedPets}
-        initialPetId={selectedAppearancePetId || undefined}
-        onSaveAppearance={handleSavePetAppearance}
-        onOpenPvP={() => {
-          setIsAppearanceStudioOpen(false);
-          setIsPokemonPvPOpen(true);
-        }}
-      />
-
       {/* Pokemon-style PvP Arena Modal */}
       <PokemonPvPArenaModal
         isOpen={isPokemonPvPOpen}
@@ -1449,13 +1447,6 @@ export default function App() {
         onOpenHatchery={() => {
           setIsPokemonPvPOpen(false);
           setIsHatcheryOpen(true);
-        }}
-        onOpenAppearanceStudio={(petId) => {
-          if (petId) {
-            setSelectedAppearancePetId(petId);
-          }
-          setIsPokemonPvPOpen(false);
-          setIsAppearanceStudioOpen(true);
         }}
       />
 
@@ -1533,6 +1524,15 @@ export default function App() {
       <ApiKeyModal
         isOpen={isApiKeyModalOpen}
         onClose={() => setIsApiKeyModalOpen(false)}
+      />
+
+      {/* Official 45-Minute 50-Question Entrance Exam Modal (Black & White Academic Testing Theme, Min Reward = King Egg) */}
+      <OfficialMockExamModal
+        isOpen={isMockExamOpen}
+        onClose={() => setIsMockExamOpen(false)}
+        onAddStolenEgg={(egg) => setStolenEggs((prev) => [egg, ...prev])}
+        onAddDragonCrystals={(amt) => setDragonCrystals((prev) => prev + amt)}
+        candidateName={accountName || 'Thí Sinh Luyện Thi 10'}
       />
 
       {/* Floating AI Assistant Quick Trigger (Adjusted for mobile to avoid bottom dock collision) */}

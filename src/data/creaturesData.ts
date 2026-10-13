@@ -1,4 +1,5 @@
 import { CreatureRarity, CreatureClassification, PetCompanion, CombatSkill } from '../types';
+import { getPetExclusiveAppearance } from './petAppearances';
 
 export interface RarityTierMeta {
   tier: CreatureRarity;
@@ -288,7 +289,7 @@ export const CLASSIFICATION_INFO: Record<CreatureClassification, ClassificationM
 };
 
 // Comprehensive Catalog of Creatures across all 12 tiers
-export const CREATURES_CATALOG: PetCompanion[] = [
+const BASE_CREATURES_CATALOG: Omit<PetCompanion, 'appearance'>[] = [
   // ==================== 1. COMMON (LIVING - TIER 1) ====================
   {
     id: 'pet-wolf-common',
@@ -1478,6 +1479,17 @@ export const CREATURES_CATALOG: PetCompanion[] = [
     ],
   },
 ];
+
+// Enrich every single creature with its unique, exclusive handcrafted appearance and artwork
+export const CREATURES_CATALOG: PetCompanion[] = BASE_CREATURES_CATALOG.map((creature) => {
+  const exclusiveApp = getPetExclusiveAppearance(creature as PetCompanion);
+  return {
+    ...creature,
+    templateId: creature.id,
+    appearance: exclusiveApp,
+    imageUrl: exclusiveApp.customArtworkUrl,
+  } as PetCompanion;
+});
 
 // Helper to look up tier meta
 export function getRarityConfig(rarity: CreatureRarity): RarityTierMeta {

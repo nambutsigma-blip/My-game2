@@ -609,10 +609,10 @@ export const PetArenaModal: React.FC<PetArenaModalProps> = ({
             {/* Active Companion Banner & Quick Enchant */}
             <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 border border-slate-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
               <div className="flex items-center gap-3.5">
-                <div className="w-16 h-16 rounded-2xl bg-slate-900 border-2 border-rose-500/50 flex items-center justify-center text-4xl shrink-0 shadow-lg relative">
-                  {activePet.avatarIcon}
+                <div className="w-16 h-16 rounded-2xl bg-slate-900 border-2 border-rose-500/50 flex items-center justify-center shrink-0 shadow-lg relative overflow-hidden">
+                  <EvolvedPetSprite pet={activePet} size="sm" />
                   {currentEnchantLvl > 0 && (
-                    <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.5 rounded-full bg-purple-600 border border-purple-300 text-[9px] font-black text-white shadow-md">
+                    <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.5 rounded-full bg-purple-600 border border-purple-300 text-[9px] font-black text-white shadow-md z-20">
                       ★{currentEnchantLvl}
                     </span>
                   )}
@@ -1074,7 +1074,9 @@ export const PetArenaModal: React.FC<PetArenaModalProps> = ({
               {/* Companion EXP Gained */}
               <div className="flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2">
-                  <span className="text-2xl">{activePet.avatarIcon}</span>
+                  <div className="w-10 h-10 flex items-center justify-center shrink-0">
+                    <EvolvedPetSprite pet={activePet} size="sm" />
+                  </div>
                   <div>
                     <span className="font-bold text-white block">{activePet.name}</span>
                     <span className="text-[10px] text-indigo-300">EXP Progression Gained</span>

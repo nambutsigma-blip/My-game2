@@ -50,7 +50,6 @@ interface PokemonPvPArenaModalProps {
   onAddDragonCrystals?: (amount: number) => void;
   onPetGainExp?: (petId: string, expAmount: number) => void;
   onOpenHatchery?: () => void;
-  onOpenAppearanceStudio?: (petId?: string) => void;
 }
 
 export const PokemonPvPArenaModal: React.FC<PokemonPvPArenaModalProps> = ({
@@ -64,7 +63,6 @@ export const PokemonPvPArenaModal: React.FC<PokemonPvPArenaModalProps> = ({
   onAddDragonCrystals,
   onPetGainExp,
   onOpenHatchery,
-  onOpenAppearanceStudio,
 }) => {
   const petList = pets || hatchedPets || [];
   const crystalsCount = dragonCrystals ?? playerCrystals ?? 0;
@@ -587,14 +585,6 @@ export const PokemonPvPArenaModal: React.FC<PokemonPvPArenaModalProps> = ({
               )}
             </button>
 
-            {onOpenAppearanceStudio && (
-              <button
-                onClick={() => onOpenAppearanceStudio(activePlayerPet?.id)}
-                className="hidden md:flex px-2.5 py-1.5 rounded-xl bg-purple-900/80 hover:bg-purple-800 border border-purple-500/50 text-purple-200 text-xs font-bold items-center gap-1 cursor-pointer transition-all active:scale-95"
-              >
-                <span>🎨 Đổi Ngoại Hình</span>
-              </button>
-            )}
             <div className="bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-800 flex items-center gap-1.5 text-xs font-bold text-amber-300">
               <span>💎</span>
               <span>{crystalsCount}</span>
@@ -1074,7 +1064,9 @@ export const PokemonPvPArenaModal: React.FC<PokemonPvPArenaModalProps> = ({
                         }`}
                       >
                         <div className="flex items-center gap-2">
-                          <span className="text-base">{p.avatarIcon}</span>
+                          <div className="w-8 h-8 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-center shrink-0 overflow-hidden">
+                            <PokemonPetVisual pet={p} size="xs" showAura={false} showShadow={false} showTitleBadge={false} />
+                          </div>
                           <div>
                             <div className="text-xs font-bold text-white">{p.name}</div>
                             <div className="text-[10px] text-slate-400">

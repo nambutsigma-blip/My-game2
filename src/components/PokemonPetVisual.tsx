@@ -13,6 +13,7 @@ import {
 } from '../types';
 import { getArtworkForPet } from '../utils/petArtworks';
 import { IsolatedPetImage } from './IsolatedPetImage';
+import { getPetExclusiveAppearance } from '../data/petAppearances';
 
 interface PokemonPetVisualProps {
   pet: PetCompanion;
@@ -26,144 +27,9 @@ interface PokemonPetVisualProps {
   showTitleBadge?: boolean;
 }
 
-// Default appearance derivation based on pet element, rarity, and name
+// Default appearance derivation using exclusive handcrafted appearances for each pet
 export const getDefaultAppearance = (pet: PetCompanion): PetAppearance => {
-  const nameLower = (pet.name + ' ' + (pet.description || '')).toLowerCase();
-
-  let archetype: PetArchetype = 'dragon';
-  if (nameLower.includes('ancient') || nameLower.includes('viễn cổ') || nameLower.includes('long vương') || pet.tierRank >= 11) {
-    archetype = 'ancient_dragon';
-  } else if (nameLower.includes('lion') || nameLower.includes('sư tử')) {
-    archetype = 'divine_lion';
-  } else if (nameLower.includes('pegasus') || nameLower.includes('thiên mã') || nameLower.includes('ngựa') || nameLower.includes('unicorn')) {
-    archetype = 'pegasus';
-  } else if (nameLower.includes('leviathan') || nameLower.includes('thủy quái') || nameLower.includes('whale') || nameLower.includes('cá voi')) {
-    archetype = 'leviathan';
-  } else if (nameLower.includes('shadow phoenix') || nameLower.includes('hắc phượng') || (nameLower.includes('phoenix') && pet.element === 'void')) {
-    archetype = 'shadow_phoenix';
-  } else if (nameLower.includes('behemoth') || nameLower.includes('cự thú') || nameLower.includes('rex') || nameLower.includes('mammoth')) {
-    archetype = 'behemoth';
-  } else if (nameLower.includes('wolf') || nameLower.includes('sói') || nameLower.includes('hound') || nameLower.includes('chó')) {
-    archetype = 'wolf';
-  } else if (nameLower.includes('fox') || nameLower.includes('cáo') || nameLower.includes('kitsune')) {
-    archetype = 'kitsune';
-  } else if (nameLower.includes('tiger') || nameLower.includes('hổ') || nameLower.includes('báo') || nameLower.includes('cat')) {
-    archetype = 'tiger';
-  } else if (nameLower.includes('bird') || nameLower.includes('phoenix') || nameLower.includes('phượng') || nameLower.includes('chim') || nameLower.includes('eagle')) {
-    archetype = 'phoenix';
-  } else if (nameLower.includes('serpent') || nameLower.includes('snake') || nameLower.includes('rắn')) {
-    archetype = 'serpent';
-  } else if (nameLower.includes('turtle') || nameLower.includes('rùa') || nameLower.includes('golem')) {
-    archetype = 'turtle';
-  } else if (nameLower.includes('mecha') || nameLower.includes('robot') || nameLower.includes('máy')) {
-    archetype = 'mecha';
-  } else if (nameLower.includes('chúa tể') || nameLower.includes('lord') || nameLower.includes('god') || pet.rarity === 'king_of_god') {
-    archetype = 'celestial';
-  }
-
-  let primaryColor = '#ef4444';
-  let secondaryColor = '#f59e0b';
-  let eyeGlowColor = '#facc15';
-  let auraEffect: PetAuraEffect = 'flames';
-  let particleStyle: PetParticleStyle = 'none';
-
-  switch (pet.element) {
-    case 'fire':
-      primaryColor = '#ef4444';
-      secondaryColor = '#f97316';
-      eyeGlowColor = '#fde047';
-      auraEffect = 'flames';
-      particleStyle = 'embers';
-      break;
-    case 'frost':
-      primaryColor = '#0284c7';
-      secondaryColor = '#38bdf8';
-      eyeGlowColor = '#bae6fd';
-      auraEffect = 'ice_crystals';
-      particleStyle = 'stars';
-      break;
-    case 'thunder':
-      primaryColor = '#eab308';
-      secondaryColor = '#facc15';
-      eyeGlowColor = '#fef08a';
-      auraEffect = 'sparks';
-      particleStyle = 'lightning';
-      break;
-    case 'shadow':
-    case 'void':
-      primaryColor = '#6b21a8';
-      secondaryColor = '#a855f7';
-      eyeGlowColor = '#e9d5ff';
-      auraEffect = 'dark_matter';
-      particleStyle = 'embers';
-      break;
-    case 'nature':
-      primaryColor = '#059669';
-      secondaryColor = '#34d399';
-      eyeGlowColor = '#a7f3d0';
-      auraEffect = 'nature_leaves';
-      particleStyle = 'petals';
-      break;
-    case 'wind':
-      primaryColor = '#0d9488';
-      secondaryColor = '#2dd4bf';
-      eyeGlowColor = '#99f6e4';
-      auraEffect = 'sparks';
-      particleStyle = 'feathers';
-      break;
-    case 'gold':
-    case 'divine':
-      primaryColor = '#d97706';
-      secondaryColor = '#fde047';
-      eyeGlowColor = '#ffffff';
-      auraEffect = 'divine_matrix';
-      particleStyle = 'stars';
-      break;
-    case 'cosmic':
-    default:
-      primaryColor = '#7e22ce';
-      secondaryColor = '#ec4899';
-      eyeGlowColor = '#f472b6';
-      auraEffect = 'supernova';
-      particleStyle = 'stars';
-      break;
-  }
-
-  const isHighTier = (pet.tierRank || 1) >= 10 || (pet.enchantmentLevel || 0) >= 4;
-  const isMythic = (pet.tierRank || 1) >= 12 || (pet.enchantmentLevel || 0) >= 5;
-
-  let headAccessory: PetHeadAccessory = 'none';
-  if (isMythic) headAccessory = 'pharaoh_crown';
-  else if (isHighTier) headAccessory = 'crown';
-  else if ((pet.enchantmentLevel || 0) >= 2) headAccessory = 'dragon_horns';
-
-  let backWing: PetBackWing = 'none';
-  if (isMythic) backWing = 'phoenix_flame_wings';
-  else if (isHighTier) backWing = 'dragon_wings';
-  else if ((pet.enchantmentLevel || 0) >= 3) backWing = 'angel_feathers';
-
-  let pattern: PetPattern = 'none';
-  if (isMythic) pattern = 'divine_crest';
-  else if (isHighTier) pattern = 'runes';
-
-  let auraIntensity: PetAuraIntensity = 'radiant';
-  if (isMythic) auraIntensity = 'godlike';
-  else if (isHighTier) auraIntensity = 'hyper';
-
-  return {
-    archetype,
-    primaryColor,
-    secondaryColor,
-    eyeGlowColor,
-    pattern,
-    headAccessory,
-    backWing,
-    auraEffect: isHighTier ? auraEffect : 'none',
-    auraIntensity,
-    particleStyle: isHighTier ? particleStyle : 'none',
-    costumeTitle: isHighTier ? `Linh Thú ${pet.name}` : undefined,
-    visualMode: '3d_art',
-  };
+  return getPetExclusiveAppearance(pet);
 };
 
 const PokemonPetVisualComponent: React.FC<PokemonPetVisualProps> = ({
@@ -412,7 +278,7 @@ const PokemonPetVisualComponent: React.FC<PokemonPetVisualProps> = ({
         >
           {/* Pure Isolated Creature Sprite (Zero frame, background removed) */}
           <IsolatedPetImage
-            src={getArtworkForPet(app.archetype, app.customArtworkUrl, pet.imageUrl)}
+            src={app.customArtworkUrl || pet.imageUrl || getArtworkForPet(app.archetype, app.customArtworkUrl, pet.imageUrl, pet.name)}
             alt={pet.name}
             boxSize={boxPx}
             primaryColor={app.primaryColor}

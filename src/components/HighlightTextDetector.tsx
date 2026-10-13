@@ -16,6 +16,7 @@ import {
 import { AiHighlightResult, HighlightColor, SavedHighlightItem } from '../types';
 import { getAiHeaders } from '../utils/aiClientHelper';
 import { lookupDictionaryWord } from '../data/dictionaryData';
+import { isAudioMuted } from '../utils/soundEffects';
 
 interface HighlightTextDetectorProps {
   onTriggerHighlight: (selectedText: string, contextSentence?: string) => void;
@@ -668,78 +669,11 @@ export const HighlightTextDetector: React.FC<HighlightTextDetectorProps> = ({
       setIsLoadingMeaning(false);
       checkIfSaved(rawClean);
 
-      // If there's context sentence, continue to enrich in background asynchronously
-      if (!context || context.trim().length <= 10) {
-        return;
-      }
+      // Provide instant 0ms preview to user while Gemini fetches deep breakdown
     }
 
-    // 3. Check instant client dictionary for 0ms response
-    if (!dictLookup && INSTANT_CLIENT_DICT[cleanKey]) {
-      const dictItem = INSTANT_CLIENT_DICT[cleanKey];
-      const sentence = context && context.trim().length > 10 ? context.trim() : (dictItem.exampleEn || `We should pay attention to ${rawClean}.`);
-      const sentenceVi = context && context.trim().length > 10 ? `Ý nghĩa ngữ cảnh: "${context.trim()}"` : (dictItem.exampleVi || `Ý nghĩa câu mẫu chứa từ vựng.`);
-
-      const instantRes: AiHighlightResult = {
-        originalText: rawClean,
-        type: dictItem.type,
-        typeLabel: dictItem.typeLabel,
-        phonetic: dictItem.phonetic,
-        vietnameseMeaning: dictItem.meaningVi,
-        detailedExplanation: dictItem.meaningVi,
-        examples: dictItem.exampleEn
-          ? [{ en: dictItem.exampleEn, vi: dictItem.exampleVi || '' }]
-          : [],
-        highlightedWord: rawClean,
-        highlightedWordMeaning: dictItem.meaningVi,
-        highlightedWordRole: dictItem.type === 'word' ? 'Từ vựng cốt lõi trong câu' : 'Cụm từ trọng tâm',
-        fullSentence: sentence,
-        fullSentenceMeaning: sentenceVi,
-        sentenceStructureAnalysis: `Phân tích câu: Sử dụng cụm "${rawClean}" tạo nên ý nghĩa chuẩn xác trong câu.`,
-        sourceContext: context,
-      };
-      setMeaningResult(instantRes);
-      cacheRef.current.set(cleanKey, instantRes);
-      setIsLoadingMeaning(false);
-      checkIfSaved(rawClean);
-      return;
-    }
-
-    // Also check multi-word phrase matches in client dict
-    for (const [key, dictItem] of Object.entries(INSTANT_CLIENT_DICT)) {
-      if (key.includes(' ') && (cleanKey === key || cleanKey.includes(key))) {
-        const sentence = context && context.trim().length > 10 ? context.trim() : (dictItem.exampleEn || `The students were able to ${key}.`);
-        const sentenceVi = context && context.trim().length > 10 ? `Ý nghĩa câu trong ngữ cảnh: "${context.trim()}"` : (dictItem.exampleVi || `Ý nghĩa câu chứa cụm từ.`);
-
-        const instantRes: AiHighlightResult = {
-          originalText: rawClean,
-          type: dictItem.type,
-          typeLabel: dictItem.typeLabel,
-          phonetic: dictItem.phonetic,
-          vietnameseMeaning: dictItem.meaningVi,
-          detailedExplanation: dictItem.meaningVi,
-          examples: dictItem.exampleEn
-            ? [{ en: dictItem.exampleEn, vi: dictItem.exampleVi || '' }]
-            : [],
-          highlightedWord: key,
-          highlightedWordMeaning: dictItem.meaningVi,
-          highlightedWordRole: 'Cụm từ then chốt trong câu',
-          fullSentence: sentence,
-          fullSentenceMeaning: sentenceVi,
-          sentenceStructureAnalysis: `Phân tích câu: Dùng cụm từ "${key}" làm trung tâm ngữ nghĩa.`,
-          sourceContext: context,
-        };
-        setMeaningResult(instantRes);
-        cacheRef.current.set(cleanKey, instantRes);
-        setIsLoadingMeaning(false);
-        checkIfSaved(rawClean);
-        return;
-      }
-    }
-
-    // 3. Request AI server endpoint for full dynamic analysis
+    // 3. Request Gemini AI server endpoint for deep contextual explanation
     setIsLoadingMeaning(true);
-    setMeaningResult(null);
 
     try {
       const controller = new AbortController();
@@ -942,7 +876,7 @@ export const HighlightTextDetector: React.FC<HighlightTextDetectorProps> = ({
 
   // Speak pronunciation
   const handleSpeak = (text: string) => {
-    if (!('speechSynthesis' in window)) return;
+    if (!('speechSynthesis' in window) || isAudioMuted()) return;
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'en-US';

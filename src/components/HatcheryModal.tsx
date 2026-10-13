@@ -40,8 +40,12 @@ import {
   getEvolvedIcon,
 } from '../utils/petEvolution';
 import { EvolvedPetSprite } from './EvolvedPetSprite';
+import { PokemonPetVisual } from './PokemonPetVisual';
 import { PetEvolutionModal } from './PetEvolutionModal';
 import { CelestialEvolutionBurst } from './CelestialEvolutionBurst';
+import { BreedingLabSection } from './BreedingLabSection';
+import { getExclusiveArtworkForCreature } from '../utils/petArtworks';
+import { getPetExclusiveAppearance } from '../data/petAppearances';
 
 interface HatcheryModalProps {
   isOpen: boolean;
@@ -56,13 +60,14 @@ interface HatcheryModalProps {
   hatchBonusRate?: number;
   hatchRebate?: number;
   onAddDragonCrystals?: (amount: number) => void;
+  onAdminUnlockAllPets?: () => void;
   onSellPet?: (petId: string) => void;
   onClaimFreeGift?: () => void;
   hasClaimedFreeGift?: boolean;
-  onOpenAppearanceStudio?: (petId?: string) => void;
   onOpenPokemonPvP?: () => void;
   onEvolvePet?: (petId: string) => PetCompanion | null;
   onLevelUpPet?: (petId: string, levels?: number) => void;
+  onAddStolenEgg?: (egg: StolenEgg) => void;
 }
 
 // Visual configuration and distinct aesthetics for each egg tier
@@ -158,6 +163,19 @@ export const getEggConfig = (type: EggTierType) => {
         accentColor: '#2dd4bf',
         gradientStyle: 'from-slate-200 via-cyan-400 to-teal-800',
         description: 'Được bao phủ bởi một lớp tinh thể băng vĩnh cửu ánh bạc lạnh giá tỏa khói sương.',
+      };
+    case 'secret':
+      return {
+        name: 'Trứng Thần Bí Nguyên Bản',
+        englishName: 'Primordial Secret Egg',
+        tierRank: 'Tier 10 (Thần Bí Cổ Đại)',
+        emoji: '🔮👁️🌌',
+        badgeBg: 'bg-gradient-to-r from-purple-900 via-indigo-950 to-slate-900 text-purple-200 border border-purple-400',
+        border: 'border-2 border-purple-400 shadow-xl shadow-purple-600/50',
+        oddsHint: 'Tỉ Lệ: Secret (70%), Cosmic (18%), King (12%)',
+        accentColor: '#a855f7',
+        gradientStyle: 'from-purple-900 via-indigo-950 to-slate-900',
+        description: 'Quả trứng cổ đại mang ấn ký của thực thể bí ẩn ngoài không thời gian, ẩn chứa năng lượng hư vô kỳ ảo.',
       };
     case 'common':
     default:
@@ -257,6 +275,17 @@ export const EggVisualGraphic: React.FC<{
           </>
         )}
 
+        {type === 'secret' && (
+          <>
+            <div className="absolute -top-1.5 text-[15px] sm:text-[17px] z-20 drop-shadow-lg animate-pulse">
+              👁️
+            </div>
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_40%,rgba(168,85,247,0.8),transparent_65%)] mix-blend-overlay animate-pulse" />
+            <div className="absolute w-full h-1 bg-gradient-to-r from-transparent via-purple-400 to-transparent top-1/2 rotate-45 blur-[0.5px] animate-spin" />
+            <span className="relative z-10 text-xl drop-shadow-md select-none">🔮</span>
+          </>
+        )}
+
         {type === 'golden' && (
           <>
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_40%_30%,rgba(255,255,255,0.7),transparent_50%)]" />
@@ -309,12 +338,12 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
   onSellPet,
   onClaimFreeGift,
   hasClaimedFreeGift = false,
-  onOpenAppearanceStudio,
   onOpenPokemonPvP,
   onEvolvePet,
   onLevelUpPet,
+  onAddStolenEgg,
 }) => {
-  const [activeTab, setActiveTab] = useState<'eggs' | 'pets' | 'enchant' | 'evolve' | 'bestiary'>('eggs');
+  const [activeTab, setActiveTab] = useState<'eggs' | 'pets' | 'enchant' | 'evolve' | 'breeding' | 'bestiary'>('eggs');
   const [selectedEgg, setSelectedEgg] = useState<StolenEgg | null>(null);
   const [isHatching, setIsHatching] = useState(false);
   const [justHatchedPet, setJustHatchedPet] = useState<PetCompanion | null>(null);
@@ -523,12 +552,16 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
       }
 
       const randomPetTemplate = pool[Math.floor(Math.random() * pool.length)] || CREATURES_CATALOG[0];
+      const exclusiveApp = randomPetTemplate.appearance || getPetExclusiveAppearance(randomPetTemplate);
 
       const newPet: PetCompanion = {
         ...randomPetTemplate,
         id: `hatched-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        templateId: randomPetTemplate.id,
         hatchedAt: `${egg.unitTitle} (${new Date().toLocaleTimeString('en-US')})`,
         enchantmentLevel: 0,
+        appearance: { ...exclusiveApp },
+        imageUrl: exclusiveApp.customArtworkUrl || randomPetTemplate.imageUrl,
       };
 
       onEggHatched(egg.id, newPet);
@@ -757,21 +790,6 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
               </button>
             )}
 
-            {/* Quick Appearance Studio Shortcut */}
-            {onOpenAppearanceStudio && (
-              <button
-                onClick={() => {
-                  onClose();
-                  onOpenAppearanceStudio();
-                }}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-500/50 text-xs font-black text-indigo-200 transition-all cursor-pointer shadow-sm"
-                title="Studio Tùy Biến Ngoại Hình Pokémon Pet"
-              >
-                <Palette className="w-3.5 h-3.5 text-indigo-400" />
-                <span className="hidden sm:inline">Ngoại Hình</span>
-              </button>
-            )}
-
             {/* Quick Skill Tree Shortcut */}
             {onOpenSkillTree && (
               <button
@@ -851,6 +869,20 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
           </button>
 
           <button
+            onClick={() => setActiveTab('breeding')}
+            className={`py-2 px-1 sm:px-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 relative ${
+              activeTab === 'breeding'
+                ? 'bg-gradient-to-r from-purple-600 via-pink-600 to-amber-500 text-white font-black shadow-lg shadow-purple-950/40'
+                : 'text-purple-300/90 hover:text-white'
+            }`}
+          >
+            <span>🧬 Lai Tạo</span>
+            {hatchedPets.length >= 2 && (
+              <span className="w-2 h-2 rounded-full bg-pink-400 animate-ping" />
+            )}
+          </button>
+
+          <button
             onClick={() => setActiveTab('bestiary')}
             className={`py-2 px-1 sm:px-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
               activeTab === 'bestiary'
@@ -886,8 +918,8 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
         {justHatchedPet && (
           <div className="shrink-0 mb-3 bg-gradient-to-r from-amber-950/90 via-slate-900 to-amber-950/90 border-2 border-amber-400 p-4 rounded-2xl text-center relative overflow-hidden animate-fade-in shadow-xl">
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <div className="w-16 h-16 rounded-2xl bg-slate-950 border-2 border-amber-400/60 flex items-center justify-center text-4xl shadow-lg shrink-0 animate-bounce">
-                {justHatchedPet.avatarIcon}
+              <div className="shrink-0 relative flex items-center justify-center p-2 rounded-2xl bg-slate-950/90 border-2 border-amber-400/60 shadow-2xl">
+                <PokemonPetVisual pet={justHatchedPet} size="lg" facing="front" />
               </div>
               <div className="text-left flex-1">
                 <div className="flex flex-wrap items-center gap-1.5 mb-1">
@@ -1032,7 +1064,30 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
                   </p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-3">
+                  {hatchedPets.length >= 2 && (
+                    <div className="p-3 rounded-xl bg-gradient-to-r from-purple-950/70 via-slate-900 to-pink-950/70 border border-purple-500/40 flex items-center justify-between gap-3 shadow-md">
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-xl">🧬</span>
+                        <div>
+                          <div className="text-xs font-bold text-purple-200">
+                            Phòng Lai Tạo Đang Sẵn Sàng ({hatchedPets.length} Thú Cưng)
+                          </div>
+                          <div className="text-[10px] text-slate-400">
+                            Ghép đôi 2 thú cưng để dung hợp gen và sinh ra quả trứng mới
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setActiveTab('breeding')}
+                        className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 text-white font-bold text-xs cursor-pointer shadow-md transition-all active:scale-95 shrink-0"
+                      >
+                        Mở Phòng Lai Tạo ➔
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {hatchedPets.map((pet, idx) => {
                     const rarityMeta = getRarityConfig(pet.rarity);
                     const classMeta = getClassificationConfig(pet.classification);
@@ -1046,10 +1101,10 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
                         className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 hover:border-amber-500/50 transition-all flex flex-col justify-between gap-3 cursor-pointer group relative overflow-hidden"
                       >
                         <div className="flex items-start gap-3">
-                          <div className="text-4xl p-2.5 rounded-2xl bg-slate-900 border border-slate-800 group-hover:scale-105 transition-transform shrink-0 relative">
-                            {pet.avatarIcon}
+                          <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden border-2 border-amber-400/50 shrink-0 relative bg-slate-900/90 group-hover:scale-105 transition-transform shadow-md flex items-center justify-center">
+                            <PokemonPetVisual pet={pet} size="sm" showAura={false} showShadow={false} showTitleBadge={false} />
                             {enchantLvl > 0 && (
-                              <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.5 rounded-full bg-purple-600 border border-purple-300 text-[9px] font-black text-white shadow-md">
+                              <span className="absolute top-0.5 left-0.5 px-1 py-0.2 rounded-full bg-purple-600 border border-purple-300 text-[8px] font-black text-white shadow-md">
                                 ★{enchantLvl}
                               </span>
                             )}
@@ -1080,7 +1135,9 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
                             <h5 className="font-bold text-sm text-white group-hover:text-amber-300 transition-colors truncate">
                               {pet.name}
                             </h5>
-                            <p className="text-[11px] text-slate-400 truncate">{pet.title}</p>
+                            <p className="text-[11px] text-amber-300/90 font-semibold truncate">
+                              ✨ {pet.appearance?.costumeTitle || pet.title}
+                            </p>
                             <p className="text-[11px] text-emerald-300 mt-1 font-medium line-clamp-2">
                               ⚡ {pet.buffDescription}
                             </p>
@@ -1145,21 +1202,6 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
                             <span>Enchant ({enchantLvl}/5)</span>
                           </button>
 
-                          {onOpenAppearanceStudio && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onClose();
-                                onOpenAppearanceStudio(pet.id);
-                              }}
-                              className="py-1.5 px-2.5 rounded-xl bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-500/40 text-indigo-300 font-bold text-xs flex items-center justify-center gap-1 transition-all cursor-pointer"
-                              title="Tùy biến ngoại hình Pokémon Pet"
-                            >
-                              <Palette className="w-3 h-3 text-indigo-400" />
-                              <span>Ngoại Hình</span>
-                            </button>
-                          )}
-
                           {onOpenArena && (
                             <button
                               onClick={(e) => {
@@ -1215,9 +1257,10 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
                     );
                   })}
                 </div>
-              )}
-            </div>
-          )}
+              </div>
+            )}
+          </div>
+        )}
 
           {/* ================= TAB 3: CRYSTAL ENCHANTMENT SHRINE ================= */}
           {activeTab === 'enchant' && (
@@ -1279,9 +1322,9 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
                             }`}
                           >
                             <div className="flex items-center gap-2.5 min-w-0">
-                              <span className="text-2xl p-1 rounded-lg bg-slate-900 shrink-0">
-                                {p.avatarIcon}
-                              </span>
+                              <div className="w-9 h-9 rounded-xl bg-slate-900 border border-purple-500/30 overflow-hidden flex items-center justify-center shrink-0">
+                                <PokemonPetVisual pet={p} size="xs" showAura={false} showShadow={false} showTitleBadge={false} />
+                              </div>
                               <div className="min-w-0">
                                 <div className="text-xs font-bold text-white truncate">{p.name}</div>
                                 <div className="text-[10px] text-slate-400 truncate">{rMeta.nameEn} • Rank {p.tierRank}</div>
@@ -1309,14 +1352,14 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
                     }`}>
                       {/* Pet Showcase Header */}
                       <div className="flex items-center gap-3.5 pb-3 border-b border-slate-800 relative">
-                        <div className={`w-16 h-16 rounded-2xl bg-slate-900 border-2 flex items-center justify-center text-4xl shadow-lg relative ${
+                        <div className={`w-20 h-20 rounded-2xl bg-slate-900 border-2 flex items-center justify-center shadow-lg relative overflow-hidden ${
                           currentLevel >= 5
                             ? 'border-yellow-400 shadow-yellow-400/60 ring-4 ring-yellow-400/20'
                             : currentLevel >= 3
                             ? 'border-purple-400 shadow-purple-500/50 ring-2 ring-purple-400/20'
                             : 'border-slate-700'
                         }`}>
-                          {currentEnchantPet.avatarIcon}
+                          <PokemonPetVisual pet={currentEnchantPet} size="md" showShadow={false} />
                           {/* Celestial Burst & Glowing Particles Altar Effect */}
                           {isPetEvolving && evolvingPet?.id === currentEnchantPet.id && (
                             <CelestialEvolutionBurst
@@ -1587,10 +1630,10 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
                             }`}
                           >
                             <div className="flex items-center gap-2.5 min-w-0">
-                              <div className="w-10 h-10 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-center text-xl shrink-0 relative">
-                                {pet.avatarIcon}
+                              <div className="w-10 h-10 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-center shrink-0 relative overflow-hidden">
+                                <PokemonPetVisual pet={pet} size="xs" showAura={false} showShadow={false} showTitleBadge={false} />
                                 {pet.isEvolved && (
-                                  <span className="absolute -top-1 -right-1 text-[9px] bg-amber-500 text-slate-950 font-black rounded-full px-1 shadow">
+                                  <span className="absolute -top-1 -right-1 text-[9px] bg-amber-500 text-slate-950 font-black rounded-full px-1 shadow z-10">
                                     👑
                                   </span>
                                 )}
@@ -1675,8 +1718,8 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
                               <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
                                 DẠNG HIỆN TẠI
                               </div>
-                              <div className="w-16 h-16 mx-auto rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-center text-4xl my-2 shadow-inner">
-                                {currentEvolvePet.avatarIcon}
+                              <div className="w-20 h-20 mx-auto rounded-2xl bg-slate-950 border border-slate-800 flex items-center justify-center my-2 shadow-inner overflow-hidden">
+                                <PokemonPetVisual pet={currentEvolvePet} size="md" showShadow={false} />
                               </div>
                               <div className="flex items-center justify-center gap-1.5 mb-1">
                                 <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${currentRarityMeta.badgeBg} ${currentRarityMeta.badgeText}`}>
@@ -1720,10 +1763,19 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
                                 <span>THẦN THÚ SAU TIẾN HÓA</span>
                               </div>
 
-                              {/* Unique Evolved Icon Preview with Celestial Aura */}
-                              <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-tr from-purple-950 via-slate-900 to-amber-950 border-2 border-yellow-400 flex items-center justify-center text-4xl my-2 shadow-lg shadow-yellow-400/40 relative">
-                                <span className="animate-bounce">{comparison.evolvedIcon}</span>
-                                <span className="absolute -top-1 -right-1 text-xs">✨</span>
+                              {/* Unique Evolved Form Preview with Celestial Aura */}
+                              <div className="w-20 h-20 mx-auto rounded-2xl bg-slate-950 border-2 border-yellow-400 flex items-center justify-center my-2 shadow-lg shadow-yellow-400/40 relative overflow-hidden">
+                                <PokemonPetVisual
+                                  pet={{
+                                    ...currentEvolvePet,
+                                    name: comparison.evolvedName,
+                                    rarity: comparison.nextRarity,
+                                    tierRank: comparison.nextTierRank,
+                                    isEvolved: true,
+                                  }}
+                                  size="md"
+                                  showShadow={false}
+                                />
                               </div>
 
                               <div className="flex items-center justify-center gap-1.5 mb-1">
@@ -1906,7 +1958,23 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
             </div>
           )}
 
-
+          {/* ================= TAB: BREEDING LAB (PHÒNG LAI TẠO & SINH TRỨNG) ================= */}
+          {activeTab === 'breeding' && (
+            <BreedingLabSection
+              hatchedPets={hatchedPets}
+              dragonCrystals={dragonCrystals}
+              hatchBonusRate={hatchBonusRate}
+              hatchRebate={hatchRebate}
+              onAddDragonCrystals={onAddDragonCrystals}
+              onAddStolenEgg={onAddStolenEgg}
+              onGoToEggsTab={(targetEgg) => {
+                setActiveTab('eggs');
+                if (targetEgg) {
+                  setSelectedEgg(targetEgg);
+                }
+              }}
+            />
+          )}
 
           {/* ================= TAB 4: BESTIARY ENCYCLOPEDIA ================= */}
           {activeTab === 'bestiary' && (
@@ -2025,8 +2093,17 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
                     >
                       <div>
                         <div className="flex items-start justify-between gap-1.5 mb-2">
-                          <div className="w-12 h-12 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-3xl group-hover:scale-110 transition-transform">
-                            {creature.avatarIcon}
+                          <div className="w-12 h-12 rounded-xl bg-slate-900 border border-slate-800 overflow-hidden relative shrink-0 group-hover:scale-105 transition-transform shadow">
+                            <img
+                              src={getExclusiveArtworkForCreature(creature)}
+                              alt={creature.name}
+                              className={`w-full h-full object-cover ${
+                                isUnlocked ? 'filter contrast-105' : 'filter brightness-0 contrast-200 opacity-30'
+                              }`}
+                            />
+                            <span className="absolute bottom-0 right-0 p-0.5 rounded-tl-md bg-slate-950/85 text-[9px]">
+                              {creature.avatarIcon}
+                            </span>
                           </div>
                           <div className="text-right">
                             <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full inline-block ${rarityMeta.badgeBg} ${rarityMeta.badgeText} border ${rarityMeta.borderColor}`}>
@@ -2041,7 +2118,10 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
                         <h5 className="font-bold text-sm text-white group-hover:text-amber-300 transition-colors">
                           {creature.name}
                         </h5>
-                        <p className="text-[11px] text-slate-400 italic line-clamp-1">{creature.title}</p>
+                        <p className="text-[11px] text-amber-300/90 font-semibold line-clamp-1">
+                          ✨ {creature.appearance?.costumeTitle || creature.title}
+                        </p>
+                        <p className="text-[10px] text-slate-400 italic line-clamp-1">{creature.title}</p>
                         <p className="text-[10px] text-slate-500 mt-1 line-clamp-2">
                           {creature.description}
                         </p>
@@ -2127,6 +2207,37 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
                     ⚡ Lair Infiltration Perk:
                   </span>
                   <p className="text-slate-200">{inspectPet.buffDescription}</p>
+                </div>
+
+                {/* Exclusive Handcrafted Appearance Showcase */}
+                <div className="p-3 rounded-xl bg-gradient-to-r from-purple-950/70 via-slate-900 to-indigo-950/70 border border-purple-500/40">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-bold text-amber-300 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                      Ngoại Hình Độc Quyền (Thiết Kế Riêng)
+                    </span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 font-bold border border-amber-400/30">
+                      ✨ Đã Tự Động Kích Hoạt
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-[10px]">
+                    <div className="bg-slate-950/80 p-2 rounded-lg border border-slate-800">
+                      <span className="text-slate-400 block">Danh hiệu / Trang phục:</span>
+                      <span className="font-bold text-amber-300">{inspectPet.appearance?.costumeTitle || inspectPet.title}</span>
+                    </div>
+                    <div className="bg-slate-950/80 p-2 rounded-lg border border-slate-800">
+                      <span className="text-slate-400 block">Bảo vật hộ thân:</span>
+                      <span className="font-bold text-cyan-300 uppercase">{inspectPet.appearance?.heldArtifact && inspectPet.appearance.heldArtifact !== 'none' ? inspectPet.appearance.heldArtifact.replace('_', ' ') : 'Thần Binh Nguyên Bản'}</span>
+                    </div>
+                    <div className="bg-slate-950/80 p-2 rounded-lg border border-slate-800">
+                      <span className="text-slate-400 block">Cánh thần / Áo choàng:</span>
+                      <span className="font-bold text-purple-300 uppercase">{inspectPet.appearance?.backWing && inspectPet.appearance.backWing !== 'none' ? inspectPet.appearance.backWing.replace('_', ' ') : 'Cánh Thần Thoại'}</span>
+                    </div>
+                    <div className="bg-slate-950/80 p-2 rounded-lg border border-slate-800">
+                      <span className="text-slate-400 block">Hào quang nguyên tố:</span>
+                      <span className="font-bold text-emerald-300 uppercase">{inspectPet.appearance?.auraEffect && inspectPet.appearance.auraEffect !== 'none' ? inspectPet.appearance.auraEffect.replace('_', ' ') : 'Khí Quang Thái Cổ'}</span>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Attack Moves (Combat Skills) */}
@@ -2228,21 +2339,16 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
                     ⚡ Bệ Thờ Tiến Hóa
                   </button>
                 )}
-                {onOpenAppearanceStudio && (
-                  <button
-                    onClick={() => {
-                      const petId = inspectPet.id;
-                      setInspectPet(null);
-                      onClose();
-                      onOpenAppearanceStudio(petId);
-                    }}
-                    className="py-2 px-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 text-white font-bold text-xs rounded-xl cursor-pointer shadow-md flex items-center justify-center gap-1.5"
-                    title="Mở Studio tùy biến ngoại hình cho pet này"
-                  >
-                    <Palette className="w-3.5 h-3.5 text-indigo-200" />
-                    <span>Ngoại Hình 🎨</span>
-                  </button>
-                )}
+                <button
+                  onClick={() => {
+                    setActiveTab('breeding');
+                    setInspectPet(null);
+                  }}
+                  className="py-2 px-3 bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 text-white font-bold text-xs rounded-xl cursor-pointer shadow-md flex items-center justify-center gap-1.5"
+                  title="Đưa thú cưng này vào Phòng Lai Tạo"
+                >
+                  <span>🧬 Lai Tạo</span>
+                </button>
                 <button
                   onClick={() => setInspectPet(null)}
                   className="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl cursor-pointer"

@@ -262,6 +262,8 @@ export interface CombatSkill {
 
 export interface PetCompanion {
   id: string;
+  templateId?: string; // Original catalog template ID for appearance tracking
+  imageUrl?: string; // Direct character artwork URL
   name: string;
   title: string;
   rarity: CreatureRarity;
@@ -298,6 +300,12 @@ export interface StolenEgg {
   stolenAt: string;
   isHatched: boolean;
   petHatched?: PetCompanion;
+  isBredEgg?: boolean;
+  parent1Name?: string;
+  parent1Avatar?: string;
+  parent2Name?: string;
+  parent2Avatar?: string;
+  mutationBonus?: boolean;
 }
 
 export interface GameState {

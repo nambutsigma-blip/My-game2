@@ -1,5 +1,37 @@
 // Web Audio API Synthesizer for safe zero-latency gameplay audio
 let audioCtx: AudioContext | null = null;
+let isSoundMuted = false;
+
+export function isAudioMuted(): boolean {
+  if (typeof window !== 'undefined') {
+    return localStorage.getItem('egg_thief_sound_muted') === 'true';
+  }
+  return isSoundMuted;
+}
+
+export function setAudioMuted(muted: boolean) {
+  isSoundMuted = muted;
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('egg_thief_sound_muted', muted ? 'true' : 'false');
+    if (muted && 'speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch {}
+    }
+    if (muted && audioCtx && audioCtx.state === 'running') {
+      try {
+        audioCtx.suspend();
+      } catch {}
+    }
+    window.dispatchEvent(new CustomEvent('egg_thief_sound_mute_changed', { detail: { muted } }));
+  }
+}
+
+export function toggleAudioMute(): boolean {
+  const next = !isAudioMuted();
+  setAudioMuted(next);
+  return next;
+}
 
 // Auto unlock Web Audio and SpeechSynthesis on first user touch/click for all devices (especially iOS/Safari & Android)
 if (typeof window !== 'undefined') {
@@ -30,7 +62,7 @@ if (typeof window !== 'undefined') {
 }
 
 function getAudioContext(): AudioContext | null {
-  if (typeof window === 'undefined') return null;
+  if (typeof window === 'undefined' || isAudioMuted()) return null;
   if (!audioCtx) {
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
     if (AudioContextClass) {
@@ -280,7 +312,7 @@ export function playEvolutionSound() {
 
 // Native Speech Synthesis for accurate English voice modeling
 export function speakEnglish(text: string, onEnd?: () => void, rate = 0.9) {
-  if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window) || isAudioMuted()) {
     if (onEnd) onEnd();
     return;
   }
