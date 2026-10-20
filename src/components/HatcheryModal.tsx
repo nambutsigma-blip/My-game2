@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   Sparkles,
@@ -18,6 +18,7 @@ import {
   Palette,
   Clock,
   Gift,
+  BookOpen,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { PetCompanion, StolenEgg, CreatureRarity, CreatureClassification, EggTierType } from '../types';
@@ -343,12 +344,38 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
   onLevelUpPet,
   onAddStolenEgg,
 }) => {
-  const [activeTab, setActiveTab] = useState<'eggs' | 'pets' | 'enchant' | 'evolve' | 'breeding' | 'bestiary'>('eggs');
+  const [activeTab, setActiveTab] = useState<'eggs' | 'pets' | 'enchant' | 'evolve' | 'breeding' | 'collection' | 'bestiary'>('eggs');
   const [selectedEgg, setSelectedEgg] = useState<StolenEgg | null>(null);
   const [isHatching, setIsHatching] = useState(false);
   const [justHatchedPet, setJustHatchedPet] = useState<PetCompanion | null>(null);
   const [inspectPet, setInspectPet] = useState<PetCompanion | null>(null);
   const [confirmSellId, setConfirmSellId] = useState<string | null>(null);
+
+  // Level-Up Visual Animation Tracking (Tracks which pet card is actively playing level up animation)
+  const [leveledUpPetIds, setLeveledUpPetIds] = useState<Record<string, { timestamp: number; newLevel: number; delta: number }>>({});
+  const prevPetLevelsRef = useRef<Record<string, number>>({});
+
+  useEffect(() => {
+    hatchedPets.forEach((pet) => {
+      const prevLvl = prevPetLevelsRef.current[pet.id];
+      const currLvl = pet.level || 1;
+      if (prevLvl !== undefined && currLvl > prevLvl) {
+        const delta = currLvl - prevLvl;
+        setLeveledUpPetIds((prev) => ({
+          ...prev,
+          [pet.id]: { timestamp: Date.now(), newLevel: currLvl, delta },
+        }));
+        setTimeout(() => {
+          setLeveledUpPetIds((prev) => {
+            const next = { ...prev };
+            delete next[pet.id];
+            return next;
+          });
+        }, 2200);
+      }
+      prevPetLevelsRef.current[pet.id] = currLvl;
+    });
+  }, [hatchedPets]);
 
   // Enchantment Shrine State
   const [selectedEnchantPetId, setSelectedEnchantPetId] = useState<string>(
@@ -367,10 +394,64 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
   const [isPetEvolving, setIsPetEvolving] = useState(false);
   const [evolvingPet, setEvolvingPet] = useState<PetCompanion | null>(null);
 
-  // Bestiary filters
+  // Collection filters & persistence
+  const [collectionStatusFilter, setCollectionStatusFilter] = useState<'all' | 'unlocked' | 'locked'>('all');
   const [bestiaryFilterClass, setBestiaryFilterClass] = useState<CreatureClassification | 'all'>('all');
   const [bestiaryFilterRarity, setBestiaryFilterRarity] = useState<string>('all');
   const [bestiarySearch, setBestiarySearch] = useState<string>('');
+
+  // Persistent tracking of which creatures the player has hatched at least once
+  const [unlockedCollectionKeys, setUnlockedCollectionKeys] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem('egg_thief_hatched_collection');
+      return saved ? new Set<string>(JSON.parse(saved)) : new Set<string>();
+    } catch {
+      return new Set<string>();
+    }
+  });
+
+  // Sync current hatched pets into collection
+  useEffect(() => {
+    if (hatchedPets && hatchedPets.length > 0) {
+      setUnlockedCollectionKeys((prev) => {
+        let changed = false;
+        const next = new Set(prev);
+        hatchedPets.forEach((pet) => {
+          if (pet.name && !next.has(pet.name)) {
+            next.add(pet.name);
+            changed = true;
+          }
+          if (pet.templateId && !next.has(pet.templateId)) {
+            next.add(pet.templateId);
+            changed = true;
+          }
+          if (pet.id && !next.has(pet.id)) {
+            next.add(pet.id);
+            changed = true;
+          }
+        });
+        if (changed) {
+          try {
+            localStorage.setItem('egg_thief_hatched_collection', JSON.stringify(Array.from(next)));
+          } catch {}
+          return next;
+        }
+        return prev;
+      });
+    }
+  }, [hatchedPets]);
+
+  const isCreatureUnlocked = (creature: { id?: string; name: string }) => {
+    return (
+      unlockedCollectionKeys.has(creature.name) ||
+      (creature.id ? unlockedCollectionKeys.has(creature.id) : false) ||
+      hatchedPets.some(
+        (p) =>
+          p.name === creature.name ||
+          (creature.id && (p.templateId === creature.id || p.id === creature.id))
+      )
+    );
+  };
 
   if (!isOpen) return null;
 
@@ -378,13 +459,16 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
   const hatchedIdsSet = new Set(hatchedPets.map((p) => p.name));
   const hasHatchedAnySecret = hatchedPets.some((p) => p.rarity === 'secret');
 
-  // Filtered creatures for Bestiary view:
-  // USER INTENT: "bây gioằ mấy con cấp secret ẩn hết đi, nó là bí mật mà"
-  // If a creature is secret or the Secret Entity and the user hasn't hatched it, it is 100% HIDDEN from the bestiary!
-  const filteredBestiary = CREATURES_CATALOG.filter((c) => {
-    if ((c.rarity === 'secret' || c.name === 'Secret Entity') && !hatchedIdsSet.has(c.name)) {
-      return false; // Conceal unhatched secret creatures and Secret Entity entirely!
-    }
+  const totalCatalogCount = CREATURES_CATALOG.length;
+  const unlockedCatalogCount = CREATURES_CATALOG.filter((c) => isCreatureUnlocked(c)).length;
+  const lockedCatalogCount = totalCatalogCount - unlockedCatalogCount;
+
+  // Filtered creatures for Collection view:
+  // Displays silhouettes for all potential pets in the catalog, revealing details once hatched at least once!
+  const filteredCollection = CREATURES_CATALOG.filter((c) => {
+    const isUnlocked = isCreatureUnlocked(c);
+    if (collectionStatusFilter === 'unlocked' && !isUnlocked) return false;
+    if (collectionStatusFilter === 'locked' && isUnlocked) return false;
     if (bestiaryFilterClass !== 'all' && c.classification !== bestiaryFilterClass) {
       return false;
     }
@@ -393,20 +477,32 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
     }
     if (bestiarySearch.trim() !== '') {
       const q = bestiarySearch.toLowerCase();
-      const matchName = c.name.toLowerCase().includes(q);
-      const matchTitle = c.title.toLowerCase().includes(q);
-      const matchBuff = c.buffDescription.toLowerCase().includes(q);
-      const matchHabitat = (c.habitat || '').toLowerCase().includes(q);
-      const matchElement = (c.element || '').toLowerCase().includes(q);
-      const matchSkill = (c.skills || []).some(
-        (s) => s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q)
-      );
-      if (!matchName && !matchTitle && !matchBuff && !matchHabitat && !matchElement && !matchSkill) {
-        return false;
+      if (isUnlocked) {
+        const matchName = c.name.toLowerCase().includes(q);
+        const matchTitle = (c.title || '').toLowerCase().includes(q);
+        const matchBuff = (c.buffDescription || '').toLowerCase().includes(q);
+        const matchHabitat = (c.habitat || '').toLowerCase().includes(q);
+        const matchElement = (c.element || '').toLowerCase().includes(q);
+        const matchSkill = (c.skills || []).some(
+          (s) => s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q)
+        );
+        if (!matchName && !matchTitle && !matchBuff && !matchHabitat && !matchElement && !matchSkill) {
+          return false;
+        }
+      } else {
+        const rMeta = getRarityConfig(c.rarity);
+        const matchRarity = rMeta.nameEn.toLowerCase().includes(q) || c.rarity.toLowerCase().includes(q);
+        const matchTier = `tier ${rMeta.rank}`.toLowerCase().includes(q);
+        const matchSil = 'silhouette'.includes(q) || 'chưa mở'.includes(q) || 'locked'.includes(q);
+        if (!matchRarity && !matchTier && !matchSil) {
+          return false;
+        }
       }
     }
     return true;
   });
+
+  const filteredBestiary = filteredCollection;
 
   // Egg Hatching Execution
   // USER INTENT: "làm tỉ lệ ra mấy con cấp cao hiếm hơn", "cấp cuối cùng là king of god"
@@ -566,6 +662,19 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
 
       onEggHatched(egg.id, newPet);
       setJustHatchedPet(newPet);
+
+      // Register newly hatched creature into collection
+      setUnlockedCollectionKeys((prev) => {
+        const next = new Set(prev);
+        next.add(newPet.name);
+        if (newPet.templateId) next.add(newPet.templateId);
+        next.add(newPet.id);
+        try {
+          localStorage.setItem('egg_thief_hatched_collection', JSON.stringify(Array.from(next)));
+        } catch {}
+        return next;
+      });
+
       setSelectedEgg(null);
       setIsHatching(false);
 
@@ -651,6 +760,18 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
     }
 
     if (evolved) {
+      // Register evolved creature into collection
+      setUnlockedCollectionKeys((prev) => {
+        const next = new Set(prev);
+        next.add(evolved.name);
+        if (evolved.templateId) next.add(evolved.templateId);
+        next.add(evolved.id);
+        try {
+          localStorage.setItem('egg_thief_hatched_collection', JSON.stringify(Array.from(next)));
+        } catch {}
+        return next;
+      });
+
       setSelectedEvolvePetId(evolved.id);
       setSelectedEnchantPetId(evolved.id);
       setIsPetEvolving(true);
@@ -680,13 +801,32 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
       if (dragonCrystals < costCrystals) return;
       onAddDragonCrystals(-costCrystals);
     }
+
+    // Trigger visual level-up animation on pet card immediately
+    const targetPet = hatchedPets.find((p) => p.id === petId);
+    const currLvl = targetPet?.level || 1;
+    setLeveledUpPetIds((prev) => ({
+      ...prev,
+      [petId]: { timestamp: Date.now(), newLevel: currLvl + levels, delta: levels },
+    }));
+
+    setTimeout(() => {
+      setLeveledUpPetIds((prev) => {
+        const next = { ...prev };
+        delete next[petId];
+        return next;
+      });
+    }, 2200);
+
     if (onLevelUpPet) {
       onLevelUpPet(petId, levels);
       playLaser();
+      playMythicFanfare();
       confetti({
-        particleCount: 35,
-        spread: 60,
+        particleCount: 50,
+        spread: 75,
         origin: { y: 0.6 },
+        colors: ['#facc15', '#f59e0b', '#38bdf8', '#ffffff', '#eab308'],
       });
     }
   };
@@ -816,7 +956,7 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
         </div>
 
         {/* Tab Navigation */}
-        <div className="grid grid-cols-5 gap-1 bg-slate-950/80 p-1.5 rounded-2xl my-3 border border-slate-800 shrink-0">
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-1 bg-slate-950/80 p-1.5 rounded-2xl my-3 border border-slate-800 shrink-0">
           <button
             onClick={() => setActiveTab('eggs')}
             className={`py-2 px-1 sm:px-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
@@ -883,14 +1023,19 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
           </button>
 
           <button
-            onClick={() => setActiveTab('bestiary')}
+            onClick={() => setActiveTab('collection')}
             className={`py-2 px-1 sm:px-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
-              activeTab === 'bestiary'
-                ? 'bg-amber-500 text-slate-950 font-black shadow-md'
-                : 'text-slate-400 hover:text-white'
+              activeTab === 'collection' || activeTab === 'bestiary'
+                ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 font-black shadow-md shadow-amber-500/20'
+                : 'text-amber-300/80 hover:text-white'
             }`}
+            title="Bộ Sưu Tập Thần Thú (Collection) - Hiển thị silhouette và giải mã khi ấp nở"
           >
-            <span>📖 Bestiary</span>
+            <BookOpen className="w-3.5 h-3.5" />
+            <span>Collection</span>
+            <span className="text-[10px] font-mono px-1 py-0.2 rounded-full bg-slate-950/60 text-amber-300 font-black">
+              {unlockedCatalogCount}/{totalCatalogCount}
+            </span>
           </button>
         </div>
 
@@ -1093,16 +1238,44 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
                     const classMeta = getClassificationConfig(pet.classification);
                     const enchantLvl = pet.enchantmentLevel || 0;
                     const stats = calculatePetStats(pet);
+                    const isLeveledUp = Boolean(leveledUpPetIds[pet.id]);
+                    const levelInfo = leveledUpPetIds[pet.id];
 
                     return (
                       <div
-                        key={idx}
+                        key={pet.id || idx}
                         onClick={() => setInspectPet(pet)}
-                        className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 hover:border-amber-500/50 transition-all flex flex-col justify-between gap-3 cursor-pointer group relative overflow-hidden"
+                        className={`p-3.5 rounded-2xl bg-slate-950 border transition-all flex flex-col justify-between gap-3 cursor-pointer group relative overflow-hidden ${
+                          isLeveledUp
+                            ? 'animate-pet-level-up border-yellow-400 ring-4 ring-yellow-400/50 shadow-2xl shadow-yellow-500/70'
+                            : 'border-slate-800 hover:border-amber-500/50'
+                        }`}
                       >
+                        {/* Sweeping diagonal golden shine effect across card during level up */}
+                        {isLeveledUp && (
+                          <div className="absolute inset-0 pointer-events-none overflow-hidden z-20">
+                            <div className="absolute -inset-full w-[300%] h-[300%] bg-gradient-to-r from-transparent via-yellow-300/40 to-transparent animate-level-up-shine" />
+                          </div>
+                        )}
+
+                        {/* Floating Celebratory LEVEL UP Badge */}
+                        {isLeveledUp && (
+                          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-30 animate-level-up-badge flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-yellow-400 via-amber-400 to-yellow-300 text-slate-950 font-black text-xs shadow-2xl shadow-yellow-400/80 border-2 border-white tracking-wider whitespace-nowrap">
+                            <Zap className="w-3.5 h-3.5 fill-slate-950" />
+                            <span>LEVEL UP!</span>
+                            <span className="bg-slate-950 text-yellow-300 px-1.5 py-0.2 rounded-full text-[10px] font-mono">
+                              +{levelInfo?.delta || 1} ➔ Lv.{pet.level || 1}
+                            </span>
+                          </div>
+                        )}
+
                         <div className="flex items-start gap-3">
-                          <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden border-2 border-amber-400/50 shrink-0 relative bg-slate-900/90 group-hover:scale-105 transition-transform shadow-md flex items-center justify-center">
+                          <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden border-2 shrink-0 relative bg-slate-900/90 group-hover:scale-105 transition-transform shadow-md flex items-center justify-center border-amber-400/50">
                             <PokemonPetVisual pet={pet} size="sm" showAura={false} showShadow={false} showTitleBadge={false} />
+                            {/* Expanding pulse ring on avatar container during level up */}
+                            {isLeveledUp && (
+                              <div className="absolute inset-0 rounded-2xl border-2 border-yellow-300 animate-level-up-ring pointer-events-none" />
+                            )}
                             {enchantLvl > 0 && (
                               <span className="absolute top-0.5 left-0.5 px-1 py-0.2 rounded-full bg-purple-600 border border-purple-300 text-[8px] font-black text-white shadow-md">
                                 ★{enchantLvl}
@@ -1114,7 +1287,12 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
                               <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${rarityMeta.badgeBg} ${rarityMeta.badgeText} border ${rarityMeta.borderColor}`}>
                                 {rarityMeta.icon} {rarityMeta.nameEn}
                               </span>
-                              <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-300 border border-cyan-500/40">
+                              <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border transition-all flex items-center gap-0.5 ${
+                                isLeveledUp
+                                  ? 'bg-gradient-to-r from-yellow-400 to-amber-400 text-slate-950 border-yellow-200 animate-level-number-pop shadow-md shadow-yellow-400/60 font-black scale-110'
+                                  : 'bg-cyan-950 text-cyan-300 border-cyan-500/40'
+                              }`}>
+                                {isLeveledUp && <Zap className="w-2.5 h-2.5 fill-slate-950" />}
                                 Lv.{pet.level || 1}
                               </span>
                               {pet.isEvolved && (
@@ -1161,7 +1339,24 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
                         </div>
 
                         {/* Action buttons */}
-                        <div className="flex items-center gap-2 pt-1 border-t border-slate-900">
+                        <div className="flex items-center gap-2 pt-1 border-t border-slate-900 flex-wrap">
+                          {/* Quick Level-Up button on card */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleQuickLevelUp(pet.id, 1);
+                            }}
+                            className={`py-1.5 px-2.5 rounded-xl border font-bold text-xs flex items-center justify-center gap-1 transition-all cursor-pointer active:scale-95 shadow-sm ${
+                              isLeveledUp
+                                ? 'bg-yellow-400 text-slate-950 border-white shadow-lg shadow-yellow-400/50 scale-105'
+                                : 'bg-cyan-950/80 hover:bg-cyan-900 border-cyan-500/40 hover:border-cyan-400 text-cyan-200'
+                            }`}
+                            title="Tăng 1 cấp cho pet để kích hoạt hiệu ứng Level Up"
+                          >
+                            <Zap className={`w-3 h-3 ${isLeveledUp ? 'text-slate-950 fill-slate-950' : 'text-cyan-400'}`} />
+                            <span>+1 Lv</span>
+                          </button>
+
                           {((pet.level || 1) >= 20 && enchantLvl >= 5) ? (
                             <button
                               onClick={(e) => {
@@ -1196,7 +1391,7 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
                               setSelectedEnchantPetId(pet.id);
                               setActiveTab('enchant');
                             }}
-                            className="flex-1 py-1.5 rounded-xl bg-purple-950/80 hover:bg-purple-900 border border-purple-500/40 text-purple-200 font-bold text-xs flex items-center justify-center gap-1 transition-all cursor-pointer"
+                            className="flex-1 py-1.5 rounded-xl bg-purple-950/80 hover:bg-purple-900 border border-purple-500/40 text-purple-200 font-bold text-xs flex items-center justify-center gap-1 transition-all cursor-pointer min-w-[90px]"
                           >
                             <Sparkles className="w-3 h-3 text-purple-400" />
                             <span>Enchant ({enchantLvl}/5)</span>
@@ -1209,7 +1404,7 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
                                 onClose();
                                 onOpenArena();
                               }}
-                              className="flex-1 py-1.5 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 text-rose-300 font-bold text-xs flex items-center justify-center gap-1 transition-all cursor-pointer"
+                              className="py-1.5 px-2.5 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 text-rose-300 font-bold text-xs flex items-center justify-center gap-1 transition-all cursor-pointer"
                             >
                               <Swords className="w-3 h-3 text-rose-400" />
                               <span>Arena</span>
@@ -1310,13 +1505,16 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
                         const isSelected = p.id === currentEnchantPet?.id;
                         const rMeta = getRarityConfig(p.rarity);
                         const lvl = p.enchantmentLevel || 0;
+                        const isLeveled = Boolean(leveledUpPetIds[p.id]);
 
                         return (
                           <div
                             key={p.id}
                             onClick={() => setSelectedEnchantPetId(p.id)}
-                            className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-2.5 ${
-                              isSelected
+                            className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-2.5 relative overflow-hidden ${
+                              isLeveled
+                                ? 'animate-pet-level-up border-yellow-400 ring-2 ring-yellow-400 shadow-lg shadow-yellow-500/60 bg-amber-950/40'
+                                : isSelected
                                 ? 'bg-purple-950/90 border-purple-400 shadow-md shadow-purple-950/50'
                                 : 'bg-slate-950 border-slate-800 hover:border-slate-700'
                             }`}
@@ -1616,13 +1814,16 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
                         const pEnchant = pet.enchantmentLevel || 0;
                         const isReady = pLevel >= 20 && pEnchant >= 5;
                         const petRarity = getRarityConfig(pet.rarity);
+                        const isLeveled = Boolean(leveledUpPetIds[pet.id]);
 
                         return (
                           <div
                             key={pet.id}
                             onClick={() => setSelectedEvolvePetId(pet.id)}
-                            className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-2.5 ${
-                              isSelected
+                            className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-2.5 relative overflow-hidden ${
+                              isLeveled
+                                ? 'animate-pet-level-up border-yellow-400 ring-2 ring-yellow-400 shadow-lg shadow-yellow-500/60 bg-amber-950/40'
+                                : isSelected
                                 ? 'bg-gradient-to-r from-amber-500/20 to-purple-500/20 border-yellow-400 shadow-md ring-1 ring-yellow-400/50'
                                 : isReady
                                 ? 'bg-slate-900/90 border-emerald-500/60 hover:border-emerald-400 hover:bg-emerald-950/20'
@@ -1976,11 +2177,92 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
             />
           )}
 
-          {/* ================= TAB 4: BESTIARY ENCYCLOPEDIA ================= */}
-          {activeTab === 'bestiary' && (
-            <div>
-              {/* Classification filter pills including divine */}
-              <div className="flex flex-wrap gap-1.5 mb-2.5">
+          {/* ================= TAB 6: COLLECTION (SILHOUETTES & UNLOCKED) ================= */}
+          {(activeTab === 'collection' || activeTab === 'bestiary') && (
+            <div className="space-y-3.5 animate-fade-in">
+              {/* Collection Progress & Discovery Statistics Banner */}
+              <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-amber-950/50 via-slate-950 to-purple-950/50 border border-amber-500/40 shadow-xl">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2.5">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 to-yellow-500 flex items-center justify-center text-slate-950 font-black shadow-md shrink-0">
+                      <BookOpen className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm sm:text-base font-black text-white flex items-center gap-2">
+                        <span>Sanctuary Pet Collection</span>
+                        <span className="text-xs text-amber-400 font-bold bg-amber-950/80 px-2 py-0.5 rounded-full border border-amber-500/30">
+                          Bộ Sưu Tập Thần Thú
+                        </span>
+                      </h4>
+                      <p className="text-[11px] text-slate-400">
+                        Displays silhouettes for all {totalCatalogCount} potential pets in the catalog. Hatch eggs to reveal their true forms and skills!
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <div className="text-right">
+                      <div className="text-xs font-black text-amber-300 font-mono">
+                        {unlockedCatalogCount} / {totalCatalogCount} Đã Giải Mã
+                      </div>
+                      <div className="text-[10px] text-slate-400 font-medium">
+                        {Math.round((unlockedCatalogCount / Math.max(1, totalCatalogCount)) * 100)}% Hoàn Thành Bộ Sưu Tập
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Progress bar */}
+                <div className="w-full bg-slate-900 rounded-full h-2.5 border border-slate-800 overflow-hidden relative shadow-inner">
+                  <div
+                    className="h-full bg-gradient-to-r from-amber-500 via-yellow-400 to-emerald-400 transition-all duration-500 rounded-full shadow-lg shadow-amber-500/50 relative"
+                    style={{
+                      width: `${Math.min(100, Math.round((unlockedCatalogCount / Math.max(1, totalCatalogCount)) * 100))}%`,
+                    }}
+                  >
+                    <div className="absolute inset-0 bg-white/20 animate-pulse" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Status filter tabs (All / Unlocked / Silhouettes) */}
+              <div className="flex items-center gap-1.5 p-1 bg-slate-950/80 rounded-xl border border-slate-800/80">
+                <button
+                  onClick={() => setCollectionStatusFilter('all')}
+                  className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    collectionStatusFilter === 'all'
+                      ? 'bg-amber-500 text-slate-950 font-black shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Tất Cả ({totalCatalogCount})
+                </button>
+                <button
+                  onClick={() => setCollectionStatusFilter('unlocked')}
+                  className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                    collectionStatusFilter === 'unlocked'
+                      ? 'bg-emerald-600 text-white font-black shadow-sm'
+                      : 'text-slate-400 hover:text-emerald-300'
+                  }`}
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Đã Mở Khóa ({unlockedCatalogCount})</span>
+                </button>
+                <button
+                  onClick={() => setCollectionStatusFilter('locked')}
+                  className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                    collectionStatusFilter === 'locked'
+                      ? 'bg-purple-600 text-white font-black shadow-sm'
+                      : 'text-slate-400 hover:text-purple-300'
+                  }`}
+                >
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>Silhouettes Chưa Mở ({lockedCatalogCount})</span>
+                </button>
+              </div>
+
+              {/* Classification filter pills */}
+              <div className="flex flex-wrap gap-1.5">
                 <button
                   onClick={() => setBestiaryFilterClass('all')}
                   className={`px-3 py-1 rounded-xl text-xs font-bold cursor-pointer transition-all ${
@@ -1989,7 +2271,7 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
                       : 'bg-slate-950 border border-slate-800 text-slate-400 hover:text-white'
                   }`}
                 >
-                  Tất Cả ({filteredBestiary.length})
+                  Tất Cả Hệ Loài
                 </button>
                 <button
                   onClick={() => setBestiaryFilterClass('living')}
@@ -2037,14 +2319,13 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
                 </button>
               </div>
 
-              {/* Rarity and search controls */}
-              <div className="flex flex-col sm:flex-row gap-2 mb-3">
-                {/* Search */}
+              {/* Rarity & search controls */}
+              <div className="flex flex-col sm:flex-row gap-2">
                 <div className="relative flex-1">
                   <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
-                    placeholder="Search by name, skill, lore, habitat..."
+                    placeholder="Search collection by name, skills, lore, or rarity tier..."
                     value={bestiarySearch}
                     onChange={(e) => setBestiarySearch(e.target.value)}
                     className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-500"
@@ -2059,14 +2340,13 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
                   )}
                 </div>
 
-                {/* Rarity filter select */}
                 <select
                   value={bestiaryFilterRarity}
                   onChange={(e) => setBestiaryFilterRarity(e.target.value)}
                   className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500 cursor-pointer"
                 >
                   <option value="all">Tất cả 15 Bậc Độ Hiếm</option>
-                  {RARITY_TIERS.filter((tier) => tier.tier !== 'secret' || hasHatchedAnySecret).map((tier) => (
+                  {RARITY_TIERS.map((tier) => (
                     <option key={tier.tier} value={tier.tier}>
                       {tier.icon} {tier.nameEn} (Rank {tier.rank})
                     </option>
@@ -2074,37 +2354,52 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
                 </select>
               </div>
 
-              {/* Grid of creatures */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
-                {filteredBestiary.map((creature) => {
+              {/* Grid of Collection creatures (Silhouettes for locked, full details for unlocked) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                {filteredCollection.map((creature) => {
                   const rarityMeta = getRarityConfig(creature.rarity);
                   const classMeta = getClassificationConfig(creature.classification);
-                  const isUnlocked = hatchedIdsSet.has(creature.name);
+                  const isUnlocked = isCreatureUnlocked(creature);
 
                   return (
                     <div
                       key={creature.id}
                       onClick={() => setInspectPet(creature)}
-                      className={`p-3 rounded-2xl bg-slate-950/90 border transition-all cursor-pointer group flex flex-col justify-between ${
+                      className={`p-3.5 rounded-2xl bg-slate-950/90 border transition-all cursor-pointer group flex flex-col justify-between pet-collection-card relative overflow-hidden ${
                         isUnlocked
-                          ? 'border-slate-700 hover:border-amber-400/70 shadow-sm'
-                          : 'border-slate-800/80 opacity-85 hover:opacity-100 hover:border-slate-600'
+                          ? 'border-slate-700/80 hover:border-amber-400/80 shadow-md hover:shadow-amber-500/10'
+                          : 'border-slate-800/60 hover:border-slate-700 bg-slate-950/60'
                       }`}
                     >
                       <div>
-                        <div className="flex items-start justify-between gap-1.5 mb-2">
-                          <div className="w-12 h-12 rounded-xl bg-slate-900 border border-slate-800 overflow-hidden relative shrink-0 group-hover:scale-105 transition-transform shadow">
+                        {/* Top card header */}
+                        <div className="flex items-start justify-between gap-2 mb-2.5">
+                          {/* Artwork / Silhouette Container */}
+                          <div className={`w-14 h-14 rounded-2xl border overflow-hidden relative shrink-0 transition-transform group-hover:scale-105 shadow-md flex items-center justify-center ${
+                            isUnlocked
+                              ? 'bg-slate-900 border-amber-500/40'
+                              : 'bg-slate-950 border-slate-800/80'
+                          }`}>
                             <img
                               src={getExclusiveArtworkForCreature(creature)}
-                              alt={creature.name}
-                              className={`w-full h-full object-cover ${
-                                isUnlocked ? 'filter contrast-105' : 'filter brightness-0 contrast-200 opacity-30'
+                              alt={isUnlocked ? creature.name : 'Unknown Silhouette'}
+                              className={`w-full h-full object-cover transition-all ${
+                                isUnlocked
+                                  ? 'filter contrast-105 drop-shadow-sm'
+                                  : 'pet-silhouette-locked'
                               }`}
                             />
-                            <span className="absolute bottom-0 right-0 p-0.5 rounded-tl-md bg-slate-950/85 text-[9px]">
-                              {creature.avatarIcon}
+                            {!isUnlocked && (
+                              <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-[1px] flex items-center justify-center">
+                                <Lock className="w-5 h-5 text-amber-400/90 drop-shadow" />
+                              </div>
+                            )}
+                            <span className="absolute bottom-0 right-0 p-1 rounded-tl-md bg-slate-950/90 text-[9px] font-bold">
+                              {isUnlocked ? creature.avatarIcon : '❓'}
                             </span>
                           </div>
+
+                          {/* Rarity & Rank Badge */}
                           <div className="text-right">
                             <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full inline-block ${rarityMeta.badgeBg} ${rarityMeta.badgeText} border ${rarityMeta.borderColor}`}>
                               {rarityMeta.icon} {rarityMeta.nameEn}
@@ -2115,29 +2410,48 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
                           </div>
                         </div>
 
-                        <h5 className="font-bold text-sm text-white group-hover:text-amber-300 transition-colors">
-                          {creature.name}
-                        </h5>
-                        <p className="text-[11px] text-amber-300/90 font-semibold line-clamp-1">
-                          ✨ {creature.appearance?.costumeTitle || creature.title}
-                        </p>
-                        <p className="text-[10px] text-slate-400 italic line-clamp-1">{creature.title}</p>
-                        <p className="text-[10px] text-slate-500 mt-1 line-clamp-2">
-                          {creature.description}
-                        </p>
+                        {/* Title and details: revealed once hatched at least once! */}
+                        {isUnlocked ? (
+                          <>
+                            <h5 className="font-bold text-sm text-white group-hover:text-amber-300 transition-colors flex items-center gap-1.5">
+                              <span>{creature.name}</span>
+                              <span className="text-[10px] text-emerald-400 font-normal">✓</span>
+                            </h5>
+                            <p className="text-[11px] text-amber-300/90 font-semibold line-clamp-1">
+                              ✨ {creature.appearance?.costumeTitle || creature.title}
+                            </p>
+                            <p className="text-[10px] text-slate-400 italic line-clamp-1">{creature.title}</p>
+                            <p className="text-[10px] text-slate-500 mt-1 line-clamp-2">
+                              {creature.description}
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <h5 className="font-bold text-sm text-slate-400 italic flex items-center gap-1.5">
+                              <span>??? (Chưa Mở Khóa)</span>
+                            </h5>
+                            <p className="text-[11px] text-slate-500 font-medium">
+                              Bí Ẩn Cổ Đại • Dạng Silhouette
+                            </p>
+                            <p className="text-[10px] text-slate-500/90 italic mt-1 line-clamp-2">
+                              Chưa ấp nở ít nhất 1 lần. Hãy ấp quả trứng {rarityMeta.nameEn} để mở khóa chân dung, tuyệt kỹ và truyền thuyết!
+                            </p>
+                          </>
+                        )}
                       </div>
 
-                      <div className="mt-2.5 pt-2 border-t border-slate-900 flex items-center justify-between text-[10px]">
+                      {/* Card Footer */}
+                      <div className="mt-3 pt-2 border-t border-slate-900 flex items-center justify-between text-[10px]">
                         <span className={`font-semibold ${classMeta.badgeStyle} px-1.5 py-0.5 rounded-md text-[9px]`}>
                           {classMeta.icon} {classMeta.title}
                         </span>
                         {isUnlocked ? (
-                          <span className="text-emerald-400 font-bold flex items-center gap-0.5">
-                            <CheckCircle2 className="w-3 h-3" /> Unlocked
+                          <span className="text-emerald-400 font-bold flex items-center gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Đã Thu Thập
                           </span>
                         ) : (
-                          <span className="text-slate-500 flex items-center gap-0.5">
-                            <Lock className="w-3 h-3" /> Undiscovered
+                          <span className="text-slate-500 font-medium flex items-center gap-1">
+                            <Lock className="w-3.5 h-3.5 text-amber-500/70" /> Silhouette
                           </span>
                         )}
                       </div>
@@ -2146,14 +2460,14 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
                 })}
               </div>
 
-              {/* Mysterious Secret Tier Notice */}
+              {/* Secret Tier Hint */}
               <div className="mt-4 p-3.5 rounded-2xl bg-gradient-to-r from-purple-950/60 via-slate-950 to-indigo-950/60 border border-purple-500/30 flex items-center gap-3">
                 <div className="p-2.5 rounded-xl bg-purple-900/50 border border-purple-500/40 text-purple-300 shrink-0">
-                  <EyeOff className="w-5 h-5" />
+                  <Sparkles className="w-5 h-5 text-amber-400" />
                 </div>
                 <div className="text-xs text-slate-300">
-                  <span className="font-black text-purple-300 uppercase tracking-wider">👁️ Cấp Độ Bí Mật (Secret Tier): </span>
-                  Các sinh linh và cổ vật cấp Secret hoàn toàn được ẩn giấu khỏi thư tịch Bestiary! Bạn chỉ có thể khám phá danh tính và sức mạnh của chúng khi may mắn ấp nở thành công từ các quả trứng rồng cấp cao.
+                  <span className="font-black text-amber-300 uppercase tracking-wider">🌟 Cơ Chế Bộ Sưu Tập (Pet Collection): </span>
+                  Mọi linh thú trong danh mục (kể cả Thần Thú Tối Cao và Secret) đều hiển thị dưới dạng Silhouette huyền bí. Khi bạn ấp nở thành công ít nhất 1 lần, chân dung, tuyệt kỹ chiến đấu và ngoại hình độc quyền sẽ vĩnh viễn được giải mã!
                 </div>
               </div>
             </div>
@@ -2161,31 +2475,74 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
         </div>
 
         {/* Detailed Creature Profile & Attack Moves Modal Overlay */}
-        {inspectPet && (
-          <div className="fixed inset-0 z-60 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-sm animate-fade-in">
-            <div className="w-full max-w-lg bg-slate-900 border-2 border-amber-400 rounded-3xl p-5 shadow-2xl text-white relative max-h-[90vh] overflow-y-auto">
-              <button
-                onClick={() => setInspectPet(null)}
-                className="absolute top-4 right-4 p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
+        {inspectPet && (() => {
+          const isInspectUnlocked = isCreatureUnlocked(inspectPet);
+          const rarityMeta = getRarityConfig(inspectPet.rarity);
+          const classMeta = getClassificationConfig(inspectPet.classification);
+          const isLeveled = Boolean(leveledUpPetIds[inspectPet.id]);
 
-              <div className="text-center pb-4 border-b border-slate-800">
-                <div className="flex justify-center mb-3">
-                  <EvolvedPetSprite pet={inspectPet} size="lg" />
-                </div>
-                <div className="flex flex-wrap items-center justify-center gap-1.5 mb-1.5">
-                  {(() => {
-                    const rarityMeta = getRarityConfig(inspectPet.rarity);
-                    const classMeta = getClassificationConfig(inspectPet.classification);
-                    return (
+          return (
+            <div className="fixed inset-0 z-60 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-sm animate-fade-in">
+              <div className="w-full max-w-lg bg-slate-900 border-2 border-amber-400 rounded-3xl p-5 shadow-2xl text-white relative max-h-[90vh] overflow-y-auto">
+                <button
+                  onClick={() => setInspectPet(null)}
+                  className="absolute top-4 right-4 p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+
+                {/* Inspect Modal Header */}
+                <div className="text-center pb-4 border-b border-slate-800">
+                  <div className="flex justify-center mb-3 relative">
+                    {isInspectUnlocked ? (
+                      <div className={`transition-all rounded-3xl p-1.5 ${
+                        isLeveled
+                          ? 'animate-pet-level-up ring-4 ring-yellow-400 shadow-2xl shadow-yellow-400/80'
+                          : ''
+                      }`}>
+                        <EvolvedPetSprite pet={inspectPet} size="lg" />
+                      </div>
+                    ) : (
+                      <div className="w-32 h-32 rounded-3xl bg-slate-950 border-2 border-slate-800/80 flex items-center justify-center relative overflow-hidden shadow-2xl group">
+                        <img
+                          src={getExclusiveArtworkForCreature(inspectPet)}
+                          alt="Unknown Silhouette"
+                          className="w-full h-full object-cover pet-silhouette-locked"
+                        />
+                        <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-[1px] flex flex-col items-center justify-center gap-1">
+                          <Lock className="w-8 h-8 text-amber-400 drop-shadow" />
+                          <span className="text-[10px] font-black uppercase tracking-wider text-amber-300">
+                            Silhouette
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    {isInspectUnlocked && isLeveled && (
+                      <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-30 animate-level-up-badge flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-yellow-400 via-amber-400 to-yellow-300 text-slate-950 font-black text-xs shadow-2xl shadow-yellow-400/80 border-2 border-white whitespace-nowrap">
+                        <Zap className="w-3.5 h-3.5 fill-slate-950" />
+                        <span>LEVEL UP! Lv.{inspectPet.level || 1}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Metadata Badges */}
+                  <div className="flex flex-wrap items-center justify-center gap-1.5 mb-1.5">
+                    <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full ${rarityMeta.badgeBg} ${rarityMeta.badgeText} border ${rarityMeta.borderColor}`}>
+                      {rarityMeta.icon} {rarityMeta.nameEn.toUpperCase()} (Rank {rarityMeta.rank})
+                    </span>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${classMeta.badgeStyle}`}>
+                      {classMeta.icon} {classMeta.title}
+                    </span>
+                    {isInspectUnlocked ? (
                       <>
-                        <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full ${rarityMeta.badgeBg} ${rarityMeta.badgeText} border ${rarityMeta.borderColor}`}>
-                          {rarityMeta.icon} {rarityMeta.nameEn.toUpperCase()} (Rank {rarityMeta.rank})
-                        </span>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${classMeta.badgeStyle}`}>
-                          {classMeta.icon} {classMeta.title}
+                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border transition-all flex items-center gap-1 ${
+                          isLeveled
+                            ? 'bg-yellow-400 text-slate-950 border-white animate-level-number-pop shadow-md scale-110 font-black'
+                            : 'bg-cyan-950 text-cyan-300 border-cyan-500/40'
+                        }`}>
+                          <Zap className={`w-3 h-3 ${isLeveled ? 'text-slate-950 fill-slate-950' : 'text-cyan-400'}`} />
+                          <span>Cấp {inspectPet.level || 1}</span>
                         </span>
                         {inspectPet.enchantmentLevel ? (
                           <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-900 text-purple-200 border border-purple-500">
@@ -2193,172 +2550,270 @@ export const HatcheryModal: React.FC<HatcheryModalProps> = ({
                           </span>
                         ) : null}
                       </>
-                    );
-                  })()}
-                </div>
-                <h4 className="text-2xl font-black text-amber-300">{inspectPet.name}</h4>
-                <p className="text-xs text-slate-300 italic">{inspectPet.title}</p>
-              </div>
-
-              <div className="py-3.5 space-y-3 text-xs">
-                {/* Lair Infiltration Perk */}
-                <div className="p-3 rounded-xl bg-emerald-950/60 border border-emerald-700/40">
-                  <span className="font-bold text-emerald-300 block mb-1">
-                    ⚡ Lair Infiltration Perk:
-                  </span>
-                  <p className="text-slate-200">{inspectPet.buffDescription}</p>
-                </div>
-
-                {/* Exclusive Handcrafted Appearance Showcase */}
-                <div className="p-3 rounded-xl bg-gradient-to-r from-purple-950/70 via-slate-900 to-indigo-950/70 border border-purple-500/40">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-bold text-amber-300 flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                      Ngoại Hình Độc Quyền (Thiết Kế Riêng)
-                    </span>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 font-bold border border-amber-400/30">
-                      ✨ Đã Tự Động Kích Hoạt
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 text-[10px]">
-                    <div className="bg-slate-950/80 p-2 rounded-lg border border-slate-800">
-                      <span className="text-slate-400 block">Danh hiệu / Trang phục:</span>
-                      <span className="font-bold text-amber-300">{inspectPet.appearance?.costumeTitle || inspectPet.title}</span>
-                    </div>
-                    <div className="bg-slate-950/80 p-2 rounded-lg border border-slate-800">
-                      <span className="text-slate-400 block">Bảo vật hộ thân:</span>
-                      <span className="font-bold text-cyan-300 uppercase">{inspectPet.appearance?.heldArtifact && inspectPet.appearance.heldArtifact !== 'none' ? inspectPet.appearance.heldArtifact.replace('_', ' ') : 'Thần Binh Nguyên Bản'}</span>
-                    </div>
-                    <div className="bg-slate-950/80 p-2 rounded-lg border border-slate-800">
-                      <span className="text-slate-400 block">Cánh thần / Áo choàng:</span>
-                      <span className="font-bold text-purple-300 uppercase">{inspectPet.appearance?.backWing && inspectPet.appearance.backWing !== 'none' ? inspectPet.appearance.backWing.replace('_', ' ') : 'Cánh Thần Thoại'}</span>
-                    </div>
-                    <div className="bg-slate-950/80 p-2 rounded-lg border border-slate-800">
-                      <span className="text-slate-400 block">Hào quang nguyên tố:</span>
-                      <span className="font-bold text-emerald-300 uppercase">{inspectPet.appearance?.auraEffect && inspectPet.appearance.auraEffect !== 'none' ? inspectPet.appearance.auraEffect.replace('_', ' ') : 'Khí Quang Thái Cổ'}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Attack Moves (Combat Skills) */}
-                <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-black text-amber-400 uppercase tracking-wide text-[11px] flex items-center gap-1.5">
-                      <Swords className="w-3.5 h-3.5 text-amber-400" />
-                      Combat Attack Moves
-                    </span>
-                    <span className="text-[10px] text-slate-400">PvP Arena Skills</span>
+                    ) : (
+                      <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-slate-950 text-slate-400 border border-slate-700 flex items-center gap-1">
+                        <Lock className="w-3 h-3 text-amber-400" />
+                        <span>Chưa Mở Khóa Chi Tiết</span>
+                      </span>
+                    )}
                   </div>
 
-                  <div className="space-y-1.5">
-                    {(inspectPet.skills || []).map((skill, sIdx) => (
-                      <div
-                        key={sIdx}
-                        className="p-2 rounded-lg bg-slate-900 border border-slate-800/80 flex items-start justify-between gap-2 text-[11px]"
-                      >
-                        <div>
-                          <div className="flex items-center gap-1.5">
-                            <span className={`font-black ${
-                              skill.type === 'ultimate'
-                                ? 'text-amber-300'
-                                : skill.type === 'elemental'
-                                ? 'text-cyan-300'
-                                : 'text-slate-200'
-                            }`}>
-                              {skill.name}
-                            </span>
-                            <span className="text-[9px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 uppercase font-mono">
-                              {skill.type}
-                            </span>
-                          </div>
-                          <p className="text-slate-400 text-[10px] mt-0.5">{skill.description}</p>
+                  <h4 className="text-2xl font-black text-amber-300">
+                    {isInspectUnlocked ? inspectPet.name : '??? (Chưa Thu Thập)'}
+                  </h4>
+                  <p className="text-xs text-slate-300 italic">
+                    {isInspectUnlocked
+                      ? inspectPet.title
+                      : 'Linh Thú Bí Ẩn • Dạng Silhouette Tiềm Năng'}
+                  </p>
+                </div>
+
+                {/* Inspect Modal Body */}
+                <div className="py-3.5 space-y-3 text-xs">
+                  {isInspectUnlocked ? (
+                    <>
+                      {/* Lair Infiltration Perk */}
+                      <div className="p-3 rounded-xl bg-emerald-950/60 border border-emerald-700/40">
+                        <span className="font-bold text-emerald-300 block mb-1">
+                          ⚡ Lair Infiltration Perk:
+                        </span>
+                        <p className="text-slate-200">{inspectPet.buffDescription}</p>
+                      </div>
+
+                      {/* Exclusive Handcrafted Appearance Showcase */}
+                      <div className="p-3 rounded-xl bg-gradient-to-r from-purple-950/70 via-slate-900 to-indigo-950/70 border border-purple-500/40">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-bold text-amber-300 flex items-center gap-1.5">
+                            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                            Ngoại Hình Độc Quyền (Thiết Kế Riêng)
+                          </span>
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 font-bold border border-amber-400/30">
+                            ✨ Đã Tự Động Kích Hoạt
+                          </span>
                         </div>
-
-                        <div className="text-right shrink-0">
-                          <span className="text-amber-400 font-black">{skill.damageMultiplier}x DMG</span>
-                          {skill.rageCost ? (
-                            <div className="text-[9px] text-rose-400 font-bold">-{skill.rageCost} Rage</div>
-                          ) : (
-                            <div className="text-[9px] text-emerald-400 font-bold">+15 Rage</div>
-                          )}
+                        <div className="grid grid-cols-2 gap-2 text-[10px]">
+                          <div className="bg-slate-950/80 p-2 rounded-lg border border-slate-800">
+                            <span className="text-slate-400 block">Danh hiệu / Trang phục:</span>
+                            <span className="font-bold text-amber-300">{inspectPet.appearance?.costumeTitle || inspectPet.title}</span>
+                          </div>
+                          <div className="bg-slate-950/80 p-2 rounded-lg border border-slate-800">
+                            <span className="text-slate-400 block">Bảo vật hộ thân:</span>
+                            <span className="font-bold text-cyan-300 uppercase">{inspectPet.appearance?.heldArtifact && inspectPet.appearance.heldArtifact !== 'none' ? inspectPet.appearance.heldArtifact.replace('_', ' ') : 'Thần Binh Nguyên Bản'}</span>
+                          </div>
+                          <div className="bg-slate-950/80 p-2 rounded-lg border border-slate-800">
+                            <span className="text-slate-400 block">Cánh thần / Áo choàng:</span>
+                            <span className="font-bold text-purple-300 uppercase">{inspectPet.appearance?.backWing && inspectPet.appearance.backWing !== 'none' ? inspectPet.appearance.backWing.replace('_', ' ') : 'Cánh Thần Thoại'}</span>
+                          </div>
+                          <div className="bg-slate-950/80 p-2 rounded-lg border border-slate-800">
+                            <span className="text-slate-400 block">Hào quang nguyên tố:</span>
+                            <span className="font-bold text-emerald-300 uppercase">{inspectPet.appearance?.auraEffect && inspectPet.appearance.auraEffect !== 'none' ? inspectPet.appearance.auraEffect.replace('_', ' ') : 'Khí Quang Thái Cổ'}</span>
+                          </div>
                         </div>
                       </div>
-                    ))}
-                  </div>
+
+                      {/* Attack Moves (Combat Skills) */}
+                      <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="font-black text-amber-400 uppercase tracking-wide text-[11px] flex items-center gap-1.5">
+                            <Swords className="w-3.5 h-3.5 text-amber-400" />
+                            Combat Attack Moves
+                          </span>
+                          <span className="text-[10px] text-slate-400">PvP Arena Skills</span>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          {(inspectPet.skills || []).map((skill, sIdx) => (
+                            <div
+                              key={sIdx}
+                              className="p-2 rounded-lg bg-slate-900 border border-slate-800/80 flex items-start justify-between gap-2 text-[11px]"
+                            >
+                              <div>
+                                <div className="flex items-center gap-1.5">
+                                  <span className={`font-black ${
+                                    skill.type === 'ultimate'
+                                      ? 'text-amber-300'
+                                      : skill.type === 'elemental'
+                                      ? 'text-cyan-300'
+                                      : 'text-slate-200'
+                                  }`}>
+                                    {skill.name}
+                                  </span>
+                                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 uppercase font-mono">
+                                    {skill.type}
+                                  </span>
+                                </div>
+                                <p className="text-slate-400 text-[10px] mt-0.5">{skill.description}</p>
+                              </div>
+
+                              <div className="text-right shrink-0">
+                                <span className="text-amber-400 font-black">{skill.damageMultiplier}x DMG</span>
+                                {skill.rageCost ? (
+                                  <div className="text-[9px] text-rose-400 font-bold">-{skill.rageCost} Rage</div>
+                                ) : (
+                                  <div className="text-[9px] text-emerald-400 font-bold">+15 Rage</div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Ecology and Lore */}
+                      <div className="grid grid-cols-2 gap-2 text-[11px]">
+                        <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800">
+                          <span className="text-slate-400 block">Habitat / Realm:</span>
+                          <span className="font-semibold text-slate-200">{inspectPet.habitat || inspectPet.hatchedAt || 'Primeval Sanctuary'}</span>
+                        </div>
+                        <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800">
+                          <span className="text-slate-400 block">Element / Affinity:</span>
+                          <span className="font-semibold text-slate-200 uppercase">{inspectPet.element || 'Wind'}</span>
+                        </div>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
+                        <span className="text-slate-400 block mb-1">Ecology & Lore:</span>
+                        <p className="text-slate-300 leading-relaxed">{inspectPet.description}</p>
+                      </div>
+                    </>
+                  ) : (
+                    /* Locked Silhouette Discovery View */
+                    <div className="space-y-3">
+                      {/* Egg Hatching Clue */}
+                      <div className="p-3.5 rounded-2xl bg-amber-950/40 border border-amber-500/40">
+                        <span className="font-black text-amber-300 flex items-center gap-1.5 mb-1.5 text-xs">
+                          <span>🥚 Gợi Ý Mở Khóa Bộ Sưu Tập:</span>
+                        </span>
+                        <p className="text-slate-200 leading-relaxed text-xs">
+                          Sinh linh này nằm trong nhóm <strong className="text-amber-300 uppercase">{rarityMeta.nameEn} (Rank {rarityMeta.rank})</strong>. Bạn hãy giải các bài tập Unit tiếng Anh, vượt qua cảnh giới sào huyệt rồng để cướp trứng và ấp nở linh thú này tại Lò Ấp!
+                        </p>
+                        <p className="text-slate-400 text-[11px] mt-1.5 italic">
+                          Khi ấp nở thành công ít nhất 1 lần, chân dung, tuyệt kỹ chiến đấu, ngoại hình độc quyền và chỉ số sẽ mở khóa vĩnh viễn.
+                        </p>
+                      </div>
+
+                      {/* Locked Obscured Combat Moves */}
+                      <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="font-black text-slate-400 uppercase tracking-wide text-[11px] flex items-center gap-1.5">
+                            <Lock className="w-3.5 h-3.5 text-amber-400/80" />
+                            Tuyệt Kỹ Chiến Đấu (Bị Phong Ấn)
+                          </span>
+                          <span className="text-[10px] text-amber-400 font-mono">Ấp nở để giải mã</span>
+                        </div>
+                        <div className="space-y-1.5 opacity-60 pointer-events-none">
+                          <div className="p-2 rounded-lg bg-slate-900 border border-slate-800/80 flex items-center justify-between">
+                            <span className="text-slate-500 font-mono text-[11px]">✦ Tuyệt kỹ Nguyên tố ?????</span>
+                            <span className="text-slate-600 font-mono text-[10px]">??x DMG</span>
+                          </div>
+                          <div className="p-2 rounded-lg bg-slate-900 border border-slate-800/80 flex items-center justify-between">
+                            <span className="text-slate-500 font-mono text-[11px]">✦ Tuyệt chiêu Tối Thượng ?????</span>
+                            <span className="text-slate-600 font-mono text-[10px]">??x DMG</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Locked Appearance Notice */}
+                      <div className="p-3 rounded-2xl bg-purple-950/30 border border-purple-500/30 text-xs">
+                        <span className="font-bold text-purple-300 block mb-1">
+                          🎨 Ngoại hình Độc Quyền (Thiết kế riêng):
+                        </span>
+                        <p className="text-slate-400 text-[11px]">
+                          Mỗi thần thú sở hữu trang phục, thần binh và hào quang riêng biệt. Chân dung hiện đang được bảo vệ dưới dạng bóng Silhouette cho đến khi bạn ấp nở thành công.
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                {/* Ecology and Lore */}
-                <div className="grid grid-cols-2 gap-2 text-[11px]">
-                  <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800">
-                    <span className="text-slate-400 block">Habitat / Realm:</span>
-                    <span className="font-semibold text-slate-200">{inspectPet.habitat || inspectPet.hatchedAt || 'Primeval Sanctuary'}</span>
-                  </div>
-                  <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800">
-                    <span className="text-slate-400 block">Element / Affinity:</span>
-                    <span className="font-semibold text-slate-200 uppercase">{inspectPet.element || 'Wind'}</span>
-                  </div>
+                {/* Inspect Modal Footer Action Buttons */}
+                <div className="pt-3 border-t border-slate-800 flex items-center justify-between gap-2 flex-wrap">
+                  {isInspectUnlocked ? (
+                    <>
+                      <button
+                        onClick={() => {
+                          setSelectedEnchantPetId(inspectPet.id);
+                          setActiveTab('enchant');
+                          setInspectPet(null);
+                        }}
+                        className="flex-1 py-2 bg-gradient-to-r from-purple-600 to-amber-500 hover:from-purple-500 hover:to-amber-400 text-white font-bold text-xs rounded-xl cursor-pointer shadow-md"
+                      >
+                        ✨ Đền Cường Hóa
+                      </button>
+                      {((inspectPet.level || 1) >= 20 && (inspectPet.enchantmentLevel || 0) >= 5) ? (
+                        <button
+                          onClick={() => {
+                            setSelectedEvolvePetId(inspectPet.id);
+                            setActiveTab('evolve');
+                            setInspectPet(null);
+                          }}
+                          className="py-2 px-3 bg-gradient-to-r from-yellow-400 via-amber-500 to-rose-500 hover:from-yellow-300 text-slate-950 font-black text-xs rounded-xl cursor-pointer shadow-lg animate-pulse"
+                        >
+                          ⚡ Tiến Hóa Rarity
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setSelectedEvolvePetId(inspectPet.id);
+                            setActiveTab('evolve');
+                            setInspectPet(null);
+                          }}
+                          className="py-2 px-3 bg-amber-950/80 hover:bg-amber-900 border border-amber-500/40 text-amber-200 font-bold text-xs rounded-xl cursor-pointer"
+                        >
+                          ⚡ Bệ Thờ Tiến Hóa
+                        </button>
+                      )}
+                      <button
+                        onClick={() => {
+                          setActiveTab('breeding');
+                          setInspectPet(null);
+                        }}
+                        className="py-2 px-3 bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 text-white font-bold text-xs rounded-xl cursor-pointer shadow-md flex items-center justify-center gap-1.5"
+                        title="Đưa thú cưng này vào Phòng Lai Tạo"
+                      >
+                        <span>🧬 Lai Tạo</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          handleQuickLevelUp(inspectPet.id, 1);
+                          setInspectPet((prev) => (prev ? { ...prev, level: (prev.level || 1) + 1 } : null));
+                        }}
+                        className="py-2 px-3 bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs rounded-xl cursor-pointer shadow-md flex items-center justify-center gap-1 active:scale-95 transition-all"
+                        title="Tăng 1 Cấp cho linh thú này"
+                      >
+                        <Zap className="w-3.5 h-3.5 text-white" />
+                        <span>+1 Cấp</span>
+                      </button>
+                      <button
+                        onClick={() => setInspectPet(null)}
+                        className="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl cursor-pointer"
+                      >
+                        Đóng
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => {
+                          setActiveTab('eggs');
+                          setInspectPet(null);
+                        }}
+                        className="flex-1 py-2.5 px-4 bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 text-slate-950 font-black text-xs rounded-xl cursor-pointer shadow-lg shadow-amber-500/20 active:scale-95 transition-all flex items-center justify-center gap-1.5"
+                      >
+                        <span>🥚 Đến Lò Ấp Trứng</span>
+                      </button>
+                      <button
+                        onClick={() => setInspectPet(null)}
+                        className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl cursor-pointer"
+                      >
+                        Đóng
+                      </button>
+                    </>
+                  )}
                 </div>
-
-                <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
-                  <span className="text-slate-400 block mb-1">Ecology & Lore:</span>
-                  <p className="text-slate-300 leading-relaxed">{inspectPet.description}</p>
-                </div>
-              </div>
-
-              <div className="pt-3 border-t border-slate-800 flex items-center justify-between gap-2">
-                <button
-                  onClick={() => {
-                    setSelectedEnchantPetId(inspectPet.id);
-                    setActiveTab('enchant');
-                    setInspectPet(null);
-                  }}
-                  className="flex-1 py-2 bg-gradient-to-r from-purple-600 to-amber-500 hover:from-purple-500 hover:to-amber-400 text-white font-bold text-xs rounded-xl cursor-pointer shadow-md"
-                >
-                  ✨ Open in Enchantment Shrine
-                </button>
-                {((inspectPet.level || 1) >= 20 && (inspectPet.enchantmentLevel || 0) >= 5) ? (
-                  <button
-                    onClick={() => {
-                      setSelectedEvolvePetId(inspectPet.id);
-                      setActiveTab('evolve');
-                      setInspectPet(null);
-                    }}
-                    className="py-2 px-3 bg-gradient-to-r from-yellow-400 via-amber-500 to-rose-500 hover:from-yellow-300 text-slate-950 font-black text-xs rounded-xl cursor-pointer shadow-lg animate-pulse"
-                  >
-                    ⚡ Tiến Hóa Rarity
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => {
-                      setSelectedEvolvePetId(inspectPet.id);
-                      setActiveTab('evolve');
-                      setInspectPet(null);
-                    }}
-                    className="py-2 px-3 bg-amber-950/80 hover:bg-amber-900 border border-amber-500/40 text-amber-200 font-bold text-xs rounded-xl cursor-pointer"
-                  >
-                    ⚡ Bệ Thờ Tiến Hóa
-                  </button>
-                )}
-                <button
-                  onClick={() => {
-                    setActiveTab('breeding');
-                    setInspectPet(null);
-                  }}
-                  className="py-2 px-3 bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 text-white font-bold text-xs rounded-xl cursor-pointer shadow-md flex items-center justify-center gap-1.5"
-                  title="Đưa thú cưng này vào Phòng Lai Tạo"
-                >
-                  <span>🧬 Lai Tạo</span>
-                </button>
-                <button
-                  onClick={() => setInspectPet(null)}
-                  className="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl cursor-pointer"
-                >
-                  Close
-                </button>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Full Cinematic Pet Evolution Modal with Celestial Burst & Awakening Sequence */}
         <PetEvolutionModal
